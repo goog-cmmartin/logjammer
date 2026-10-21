@@ -15,8 +15,9 @@ from logjammer.client import LogJammer
 class CaseExpansionTest(unittest.TestCase):
 
   def setUp(self):
-    self.config = LogJammerConfig()
+    self.config = LogJammerConfig(api_key="mock_key")
     self.generator = ScenarioGenerator(self.config)
+    self.generator._client = mock.MagicMock()
 
     self.sample_case = """
 Case Overview
@@ -29,9 +30,12 @@ Target Cloud Resources: AWS Glue GetConnections, GetDatabases
 """
 
   def test_infer_log_types_heuristic(self):
-    inferred = self.generator.infer_log_types(self.sample_case)
-    self.assertIn("AWS_CLOUDTRAIL", inferred)
-    self.assertIn("AWS_VPC_FLOW", inferred)
+    with mock.patch.object(
+        self.generator.client.models, "generate_content", side_effect=Exception("API Call Mocked")
+    ):
+      inferred = self.generator.infer_log_types(self.sample_case)
+      self.assertIn("AWS_CLOUDTRAIL", inferred)
+      self.assertIn("AWS_VPC_FLOW", inferred)
 
   @mock.patch.object(ScenarioGenerator, "generate")
   def test_generate_from_case(self, mock_generate):

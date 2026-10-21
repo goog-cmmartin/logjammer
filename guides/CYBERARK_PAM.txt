@@ -62,7 +62,7 @@ CyberArk PAM logs appear in multiple industry-standard formats depending on the 
 | `PRI` | String | Syslog Facility/Severity code enclosed in `<>` | `<5>1`, `<7>1`, `<5>`, `<13>` |
 | `Version` | Integer | RFC 5424 syslog version (omitted in RFC 3164) | `1` |
 | `Timestamp` | String | ISO 8601 UTC or BSD format | `2026-03-26T10:11:59Z`, `May 06 04:21:42` |
-| `Hostname` | String | Vault or component hostname / FQDN | `VAULT-PROD-01`, `PEG-P-P-1-BBVA-BLUE` |
+| `Hostname` | String | Vault or component hostname / FQDN | `VAULT-PROD-01`, `VAULT-NODE-PROD-02` |
 
 ---
 
@@ -83,7 +83,7 @@ CyberArk PAM logs appear in multiple industry-standard formats depending on the 
 | `cs1Label` | `"Affected User Name"` | Label | Static CEF label definition |
 | `cs1` | Affected User | String | Targeted user context when modifying user objects |
 | `cs2Label` | `"Safe Name"` | Label | Static CEF label definition |
-| `cs2` | Safe Name | String | `P-ES3C2-ESP-SYS-AD`, `PVWAReports`, `DEV-ORA-LA-SUPP`, `PasswordManagerShared` |
+| `cs2` | Safe Name | String | `P-SYS-PROD-AD`, `PVWAReports`, `DEV-ORA-LA-SUPP`, `PasswordManagerShared` |
 | `cs3Label` | `"Device Type"` | Label | Static CEF label definition |
 | `cs3` | Device Type | String | `Operating System`, `Database`, `Application`, `Network`, `Cloud Infrastructure` |
 | `cs4Label` | `"Database"` | Label | Static CEF label definition |
@@ -159,7 +159,7 @@ When generating test data, replace all static time values with relative timestam
 ### Scenario 1: Password Retrieval / Checkout by Human Administrator (CEF Format)
 * **Description**: User retrieves an administrative domain account password via PVWA with ticket justification.
 ```text
-<5>1 ##$TimeStamp-0d0h15m0s$## PAM-VAULT-01 CEF:0|Cyber-Ark|Vault|14.6.0000|295|Retrieve password|5|act=Retrieve password suser=adm_jdoe@corp.global fname=Root\Operating System-Corp_Domain_Admin-dc01.corp.global-svc_tier0 dvc=10.100.12.5 shost=192.168.45.12 dhost=dc01.corp.global duser=svc_tier0 externalId=INC-9948210 app= reason=Emergency Domain Controller maintenance cs1Label="Affected User Name" cs1= cs2Label="Safe Name" cs2=P-CORP-SYS-TIER0-ADM cs3Label="Device Type" cs3=Operating System cs4Label="Database" cs4= cs5Label="Other info" cs5=10.100.12.5 cn1Label="Request Id" cn1=1892 cn2Label="Ticket Id" cn2=INC-9948210 msg=Emergency Domain Controller maintenance
+<5>1 ##$TimeStamp-0d0h15m0s$## PAM-VAULT-01 CEF:0|Cyber-Ark|Vault|14.6.0000|295|Retrieve password|5|act=Retrieve password suser=adm_jdoe@corp.example fname=Root\Operating System-Corp_Domain_Admin-dc01.corp.example-svc_tier0 dvc=10.100.12.5 shost=192.168.45.12 dhost=dc01.corp.example duser=svc_tier0 externalId=INC-9948210 app= reason=Emergency Domain Controller maintenance cs1Label="Affected User Name" cs1= cs2Label="Safe Name" cs2=P-CORP-SYS-TIER0-ADM cs3Label="Device Type" cs3=Operating System cs4Label="Database" cs4= cs5Label="Other info" cs5=10.100.12.5 cn1Label="Request Id" cn1=1892 cn2Label="Ticket Id" cn2=INC-9948210 msg=Emergency Domain Controller maintenance
 ```
 
 ### Scenario 2: Privileged Session Manager (PSM) Live Session Start (CEF Format)
@@ -177,7 +177,7 @@ When generating test data, replace all static time values with relative timestam
 ### Scenario 4: Central Policy Manager (CPM) Automated Password Rotation (CyberArk EDA JSON)
 * **Description**: CPM successfully reconciles and changes an Oracle service account password.
 ```text
-<5>1 ##$TimeStamp-0d0h45m0s$## PAM-VAULT-01 {"format":"cyberark-eda-json","version":"1.0","syslog":{"audit_record":{"Rfc5424":"yes","Timestamp":"##$SyslogTime-0d0h45m0s$##","IsoTimestamp":"##$TimeStamp-0d0h45m0s$##","Hostname":"PAM-VAULT-01","Vendor":"Cyber-Ark","Product":"Vault","Version":"14.6.0000","MessageID":"24","Desc":"CPM Change Password","Severity":"Info","Issuer":"PasswordManager","Action":"CPM Change Password","SourceUser":"","TargetUser":"","Safe":"P-ORA-PROD-PASSWORDS","File":"Root\\Database-PLAT-ORACLE-FINDB-db01.corp.global-app_finance","Station":"10.100.12.10","Location":"","Category":"","RequestId":"","Reason":"ExpirationPeriod","ExtraDetails":"address=db01.corp.global;username=app_finance;","Message":"CPM Change Password","GatewayStation":"","CAProperties":{"CAProperty":[{"Name":"LogonDomain","Value":""},{"Name":"DeviceType","Value":"Database"},{"Name":"PolicyID","Value":"Oracle_Database_Automated"},{"Name":"Address","Value":"db01.corp.global"},{"Name":"UserName","Value":"app_finance"},{"Name":"CreationMethod","Value":"PVWA"},{"Name":"LastSuccessVerification","Value":"##$Epoch-1d0h0m0s$##"},{"Name":"SequenceID","Value":"240"},{"Name":"LastSuccessChange","Value":"##$Epoch-0d0h45m0s$##"},{"Name":"RetriesCount","Value":"0"},{"Name":"CPMStatus","Value":"success"},{"Name":"LastTask","Value":"ChangeTask"}]}}}}
+<5>1 ##$TimeStamp-0d0h45m0s$## PAM-VAULT-01 {"format":"cyberark-eda-json","version":"1.0","syslog":{"audit_record":{"Rfc5424":"yes","Timestamp":"##$SyslogTime-0d0h45m0s$##","IsoTimestamp":"##$TimeStamp-0d0h45m0s$##","Hostname":"PAM-VAULT-01","Vendor":"Cyber-Ark","Product":"Vault","Version":"14.6.0000","MessageID":"24","Desc":"CPM Change Password","Severity":"Info","Issuer":"PasswordManager","Action":"CPM Change Password","SourceUser":"","TargetUser":"","Safe":"P-ORA-PROD-PASSWORDS","File":"Root\\Database-PLAT-ORACLE-FINDB-db01.corp.example-app_finance","Station":"10.100.12.10","Location":"","Category":"","RequestId":"","Reason":"ExpirationPeriod","ExtraDetails":"address=db01.corp.example;username=app_finance;","Message":"CPM Change Password","GatewayStation":"","CAProperties":{"CAProperty":[{"Name":"LogonDomain","Value":""},{"Name":"DeviceType","Value":"Database"},{"Name":"PolicyID","Value":"Oracle_Database_Automated"},{"Name":"Address","Value":"db01.corp.example"},{"Name":"UserName","Value":"app_finance"},{"Name":"CreationMethod","Value":"PVWA"},{"Name":"LastSuccessVerification","Value":"##$Epoch-1d0h0m0s$##"},{"Name":"SequenceID","Value":"240"},{"Name":"LastSuccessChange","Value":"##$Epoch-0d0h45m0s$##"},{"Name":"RetriesCount","Value":"0"},{"Name":"CPMStatus","Value":"success"},{"Name":"LastTask","Value":"ChangeTask"}]}}}}
 ```
 
 ### Scenario 5: CyberArk Dynamic Privileged Access (DPA) Zero Standing Privilege Session Start (Cloud JSON)
@@ -187,33 +187,33 @@ When generating test data, replace all static time values with relative timestam
   "uuid": "893c52a0-4b11-4791-8842-3a87114e9102",
   "tenantId": "c9284fa1-8204-4b17-a551-7140e915fa01",
   "timestamp": ##$Epoch-0d0h10m0s$##000,
-  "username": "alice.wong@fintech.io",
+  "username": "alice.wong@example.com",
   "applicationCode": "DPA",
   "auditCode": "DPAI401",
   "auditType": "Info",
   "action": "DPA Windows session started",
-  "userId": "alice.wong@fintech.io",
+  "userId": "alice.wong@example.com",
   "source": "198.51.100.24",
   "actionType": "Start",
   "component": "DPA-RDP Connection",
   "serviceName": "Secure Infrastructure Access",
   "accessMethod": "Ephemeral",
   "accountId": null,
-  "target": "prod-k8s-node01.infra.fintech.io",
+  "target": "prod-k8s-node01.infra.example.com",
   "command": null,
   "sessionId": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
-  "message": "A DPA session on Windows was started by alice.wong@fintech.io",
+  "message": "A DPA session on Windows was started by alice.wong@example.com",
   "customData": {
     "DPA": {
       "ephemeral_user": "dpa-alice-9912",
       "access_method": "Zero Standing Privilege",
       "assigned_groups": "Cloud-Infra-Admins",
       "authentication_methods": "Federation-SAML",
-      "target_machine": "prod-k8s-node01.infra.fintech.io",
-      "source_user": "alice.wong@fintech.io",
+      "target_machine": "prod-k8s-node01.infra.example.com",
+      "source_user": "alice.wong@example.com",
       "source_hostname": "MAC-LPT-ALICE",
       "assigned_domain_groups": "Domain Admins",
-      "connection_string": "secureaccess /i alice.wong@fintech.io /s eu-fintech-access /d infra.fintech.io /a prod-k8s-node01.infra.fintech.io /u dpa-alice-9912",
+      "connection_string": "secureaccess /i alice.wong@example.com /s eu-fintech-access /d infra.example.com /a prod-k8s-node01.infra.example.com /u dpa-alice-9912",
       "maximum_session_duration": "480 Minutes"
     }
   },

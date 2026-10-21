@@ -141,7 +141,7 @@ Used by EPM API extractions and agent SIEM streaming.
 | `FileQualifier` | Long | Internal EPM unique 64-bit ID | `-6151227912572614000`, `3762565144647786500` |
 | `Hash` | String | SHA1 file hash with prefix | `SHA1##9269F1FBCF65FEFBC88A2E239519C21EFE0F6BA5`, `""` |
 | `IsMalware` | Boolean | Reputation intelligence indicator | `false`, `true` |
-| `LastEventComputer` | String | Endpoint hostname | `WKSTN-FIN-091`, `ITJMARKS`, `Deleted` |
+| `LastEventComputer` | String | Endpoint hostname | `WKSTN-FIN-091`, `WKSTN-ADMIN-01`, `Deleted` |
 | `LastEventDate` | String | Event timestamp (ISO 8601) | `2026-03-19T13:09:07.653` |
 | `LastEventID` | Long | Unique event sequence number | `161141548`, `696742914` |
 | `LastEventPackageName` | String | Software display/package name | `Microsoft Management Console (mmc.exe)`, `Visual Studio` |
@@ -149,8 +149,8 @@ Used by EPM API extractions and agent SIEM streaming.
 | `LastEventPreHistorySourceType`| String| Context launcher type | `Updater`, `Windows`, `Unknown` |
 | `LastEventSourceName` | String | Absolute binary path or source | `C:\WINDOWS\system32\mmc.exe`, `Microsoft Windows` |
 | `LastEventSourceType` | String | Origin type of source | `LocalDisk`, `NetworkShare`, `Windows`, `OldApplication` |
-| `LastEventUserName` | String | Domain\Username of user | `CORP\\jmarks`, `servpronet\\superjm` |
-| `PolicyName` | String | Applied EPM policy rule | `Servpro-IT-Elevate-Task`, `Default Elevate Unhandled` |
+| `LastEventUserName` | String | Domain\Username of user | `CORP\\jdoe`, `corpdomain\\sysadmin` |
+| `PolicyName` | String | Applied EPM policy rule | `Corp-IT-Elevate-Task`, `Default Elevate Unhandled` |
 | `Publisher` | String | Authenticode digital signature | `Microsoft Windows`, `Microsoft Corporation`, `""` |
 | `TotalEvents` | Integer | Aggregate counter for this event | `1`, `11`, `14` |
 

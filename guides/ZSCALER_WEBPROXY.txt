@@ -66,8 +66,8 @@ Custom NSS stream emitting a timestamp prefix followed by tab-separated pairs.
 | Field (JSON) | Field (LEEF) | Field (CEF) | Type | Description / Example Values |
 | :--- | :--- | :--- | :--- | :--- |
 | `ClientIP` | `src` | `src` | IP | Internal client IPv4 address (`10.0.1.10`, `192.168.1.58`) |
-| `clientpublicIP` | `srcPostNAT` | `sourceTranslatedAddress` | IP | Egress public IP before Zscaler node (`198.51.10.1`) |
-| `serverip` | `dst` | `dst` | IP | Destination server IP address (`198.51.10.2`) |
+| `clientpublicIP` | `srcPostNAT` | `sourceTranslatedAddress` | IP | Egress public IP before Zscaler node (`198.51.100.1`) |
+| `serverip` | `dst` | `dst` | IP | Destination server IP address (`198.51.100.2`) |
 | `location` | `realm` | `spriv` | String | Location name or VPN profile (`Road Warrior`, `Road%20Warrior`, `Corporate Offices`, `AWS_Prod_-us-east-1`) |
 
 ### 3.3 Identity & Endpoint Context
@@ -76,7 +76,7 @@ Custom NSS stream emitting a timestamp prefix followed by tab-separated pairs.
 | :--- | :--- | :--- | :--- | :--- |
 | `user` | `usrName` | `suser` | String | UPN (`user@example.com`), numeric ID (`849949440`), or machine account (`noauth-protocol$@domain.com`) |
 | `department` | `role` | `cs1` | String | User department (`IT Operations`, `IT%20Operations`, `Default Department`, `Security`) |
-| `devicehostname` | `devicehostname` | `dvchost` | String | Client hostname (`LAPLON1863`, `IFS-CF7JVF2`, `NA`) |
+| `devicehostname` | `devicehostname` | `dvchost` | String | Client hostname (`WKSTN-LON-01`, `WKSTN-CORP-01`, `NA`) |
 | `deviceowner` | `deviceowner` | - | String | User ID or SAM account (`jdoe`, `dummy_user`, `NA`) |
 | `deviceostype` | - | - | String | `Windows OS`, `Mac OS`, `Linux`, `iOS`, `Android` |
 | `deviceosversion` | - | - | String | `Microsoft Windows 10 Enterprise;64 bit;amd64`, `macOS 13.4` |

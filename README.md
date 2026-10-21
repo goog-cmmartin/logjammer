@@ -18,6 +18,8 @@ AI-Powered Synthetic Log Generator for Security Testing, Detection Engineering, 
 - **Built-in & Pre-packaged Schema Playbooks**: Includes pre-built format specifications for cloud providers (18 AWS sources: CloudTrail, VPC Flow, GuardDuty, WAF, S3, Route 53, etc.) and enterprise infrastructure (Windows Sysmon, Windows DNS, Cisco ASA, Palo Alto, Microsoft 365).
 - **Hierarchical & Multi-Directory Guide Organization**: Organize playbooks neatly into subdirectories (e.g. `guides/AWS/`, `guides/AZURE/`). Discovers `.txt`, `.md`, and `.markdown` files recursively with flexible alias resolution (`AWS_CLOUDTRAIL`, `CLOUDTRAIL`, `VPC_FLOW`).
 - **Learn Any Custom Schema**: Provide raw sample logs (`.json`, `.log`, `.csv`, `.raw`) from internal services, custom firewalls, or niche appliances. Log Jammer analyzes the structure and produces an AI schema playbook—even directly into subdirectories.
+- **Reverse-Engineer Detection Rules to Synthetic Telemetry**: Ingest Google SecOps curated (`ur_*`) or custom YARA-L 2.0 rules, or local `.yaral` files. Automatically deconstruct positive constraints, negative exclusions (`!=`), thresholds, and entity bindings, then generate realistic raw logs to trigger (`fire`), test false-positive avoidance (`evade`), or simulate an end-to-end incident (`full-chain`).
+- **Google SecOps Detection Rule Catalog & CLI**: Synchronize, search, inspect, and analyze curated rules and MITRE ATT&CK techniques directly within Log Jammer without external dependencies.
 - **Natural Language Attack Scenarios**: Describe full attack chains in plain English (e.g., *"Spear-phishing email with PDF attachment leading to credential dumping via Mimikatz and S3 exfiltration"*).
 - **Dynamic Relative Time Templating**: Automatically resolves chronological offsets (e.g. `##$TimeStamp-0d2h15m0s$##` $\to$ ISO 8601 timestamps) ensuring events tell a coherent chronological story.
 - **Pluggable Output Sinks**: Export generated events directly to **JSONL files**, **Syslog (UDP/TCP/TLS)**, **SIEM Webhooks (Splunk HEC, Elastic, Chronicle)**, or **stdout**.
@@ -151,6 +153,47 @@ logjammer generate \
   --project YOUR_GCP_PROJECT_ID
 ```
 
+### 8. Work Backwards from SecOps Rules (`--from-rule`, `--from-technique`)
+Generate synthetic telemetry tailored specifically to trigger or validate YARA-L 2.0 detection rules:
+
+```bash
+# 1. Sync rule catalog from your Google SecOps tenant (Curated + Custom)
+logjammer rules sync --all
+# Or sync only curated rules from Content Hub
+logjammer rules sync --curated
+
+# 2. Search rules by MITRE technique or keyword
+logjammer rules list --technique T1562.008
+logjammer rules list --search powershell
+
+# 3. Inspect rule logic and automated trigger deconstruction
+logjammer rules show aws_cloudtrail_logging_tampered
+
+# 4. Generate synthetic logs to trigger ('fire') the detection
+logjammer generate \
+  --from-rule aws_cloudtrail_logging_tampered \
+  --rule-outcome fire \
+  --output ./cloudtrail_tamper.jsonl
+
+# 5. Generate logs directly by MITRE technique
+logjammer generate \
+  --from-technique T1562.008 \
+  --rule-outcome fire \
+  --output ./technique_simulation.jsonl
+
+# 6. Test false positive avoidance ('evade') or full attack progression ('full-chain')
+logjammer generate \
+  --from-rule m_hunting_powershell_av_exclusion_path_1 \
+  --rule-outcome evade \
+  --output ./evasion_test.jsonl
+
+# 7. Use a local YARA-L rule file (.yaral or .json)
+logjammer generate \
+  --from-rule ./my_custom_rule.yaral \
+  --rule-outcome fire \
+  --output secops://YOUR_SECOPS_CUSTOMER_ID@us
+```
+
 ---
 
 ## 📚 Schema Guides & Directory Organization
@@ -191,7 +234,15 @@ scenario = client.generate(
     enrich_gti=True
 )
 
-# 4. Export to file or SIEM (JSONL, Syslog, Webhook, SecOps)
+# 4. Generate logs tailored to a Google SecOps detection rule
+rule = client.get_rule("aws_cloudtrail_logging_tampered")
+rule_scenario = client.generate_from_rule(
+    rule=rule,
+    outcome="fire",
+    count=2,
+)
+
+# 5. Export to file or SIEM (JSONL, Syslog, Webhook, SecOps)
 client.export(
     scenario,
     destination="secops://YOUR_SECOPS_CUSTOMER_ID@us",

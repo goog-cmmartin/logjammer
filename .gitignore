@@ -74,6 +74,7 @@ venv.bak/
 # Log Jammer local output & guides cache
 .logjammer/
 *.jsonl
+case*.txt
 oss_logjammer.zip
 
 # Bazel internal rules

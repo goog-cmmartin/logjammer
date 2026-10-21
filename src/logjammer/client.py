@@ -6,8 +6,9 @@ from typing import Dict, List, Optional, Union
 
 from .config import LogJammerConfig
 from .generator import ScenarioGenerator
-from .models import GeneratedScenario, LearnResult
+from .models import GeneratedScenario, LearnResult, RuleAnalysis, SecOpsRule
 from .playbook import PlaybookService
+from .rules import RuleService
 from .scenario import ScenarioService
 from .sinks.base import BaseSink
 from .sinks.file import FileSink
@@ -35,23 +36,35 @@ class LogJammer:
       gti_api_key: Optional[str] = None,
       model: str = "gemini-3.7-flash",
       guides_dir: Optional[Union[str, Path]] = None,
+      rules_dir: Optional[Union[str, Path]] = None,
+      customer_id: Optional[str] = None,
+      project_id: Optional[str] = None,
+      region: Optional[str] = None,
       temperature: float = 1.0,
       thinking_budget: int = -1,
   ):
     guides_path = Path(guides_dir) if guides_dir else None
+    rules_path = Path(rules_dir) if rules_dir else None
     self.config = LogJammerConfig(
         api_key=api_key,
         gti_api_key=gti_api_key,
         model=model,
+        customer_id=customer_id,
+        project_id=project_id,
+        region=region or "us",
         temperature=temperature,
         thinking_budget=thinking_budget,
     )
     if guides_path:
       self.config.guides_dir = guides_path
       self.config.guides_dir.mkdir(parents=True, exist_ok=True)
+    if rules_path:
+      self.config.rules_dir = rules_path
+      self.config.rules_dir.mkdir(parents=True, exist_ok=True)
 
     self.playbook_service = PlaybookService(self.config)
-    self.generator = ScenarioGenerator(self.config, self.playbook_service)
+    self.rule_service = RuleService(self.config)
+    self.generator = ScenarioGenerator(self.config, self.playbook_service, rule_service=self.rule_service)
     self.scenario_service = ScenarioService(self.config)
 
   def learn(
@@ -153,6 +166,71 @@ class LogJammer:
     if save_to_cache:
       self.scenario_service.save_scenario(sc_obj)
     return sc_obj
+
+  def generate_from_rule(
+      self,
+      rule: Union[SecOpsRule, str],
+      log_types: Optional[List[str]] = None,
+      outcome: str = "fire",
+      base_time: Optional[datetime] = None,
+      custom_system_prompt: Optional[str] = None,
+      count: Optional[int] = None,
+      save_to_cache: bool = True,
+  ) -> GeneratedScenario:
+    """Generate synthetic logs engineered to trigger or test a specific YARA-L rule."""
+    sc_obj = self.generator.generate_from_rule(
+        rule=rule,
+        log_types=log_types,
+        outcome=outcome,
+        base_time=base_time,
+        custom_system_prompt=custom_system_prompt,
+        count=count,
+    )
+    if save_to_cache:
+      self.scenario_service.save_scenario(sc_obj)
+    return sc_obj
+
+  def sync_rules(
+      self,
+      rule_filter: str = 'rule_owner:"*"',
+      page_size: int = 1000,
+      max_rules: Optional[int] = None,
+  ) -> List[SecOpsRule]:
+    """Sync and cache curated and custom rules from Google SecOps."""
+    return self.rule_service.sync_rules(
+        rule_filter=rule_filter,
+        page_size=page_size,
+        max_rules=max_rules,
+    )
+
+  def list_rules(
+      self,
+      query: Optional[str] = None,
+      technique: Optional[str] = None,
+      tactic: Optional[str] = None,
+      live_only: bool = False,
+  ) -> List[SecOpsRule]:
+    """Search and filter cached rules."""
+    return self.rule_service.search_rules(
+        query=query,
+        technique=technique,
+        tactic=tactic,
+        live_only=live_only,
+    )
+
+  def get_rule(self, identifier: str) -> Optional[SecOpsRule]:
+    """Retrieve a rule by local file path, rule_id, or display_name."""
+    return self.rule_service.get_rule(identifier)
+
+  def analyze_rule(self, rule: Union[SecOpsRule, str]) -> RuleAnalysis:
+    """Deconstruct a YARA-L rule into trigger conditions and suggested log sources."""
+    if isinstance(rule, str):
+      rule_obj = self.get_rule(rule)
+      if not rule_obj:
+        raise ValueError(f"Rule '{rule}' not found.")
+    else:
+      rule_obj = rule
+    return self.generator.rule_analyzer.analyze(rule_obj)
 
 
   def export(

@@ -89,6 +89,26 @@ def create_parser() -> argparse.ArgumentParser:
       help="Path to a SOAR/SIEM case report or alert file (e.g. ~/case.txt) to expand with surrounding events",
   )
   gen_p.add_argument(
+      "--from-rule",
+      "-r",
+      help="Rule name, rule ID, or path to local .yaral/.json rule file to generate trigger logs for",
+  )
+  gen_p.add_argument(
+      "--from-technique",
+      help="MITRE ATT&CK technique ID (e.g. T1564, T1059.001) to find and generate trigger logs for",
+  )
+  gen_p.add_argument(
+      "--rule-outcome",
+      choices=["fire", "evade", "full-chain"],
+      default="fire",
+      help="Generation objective for rules: fire (trigger rule), evade (negative test), full-chain (simulation) (default: fire)",
+  )
+  gen_p.add_argument(
+      "--rule-count",
+      type=int,
+      help="Override target number of trigger events to generate",
+  )
+  gen_p.add_argument(
       "--surround-before",
       default="30m",
       help="Time window before anchor event for pre-incident setup telemetry (default: 30m)",
@@ -143,6 +163,82 @@ def create_parser() -> argparse.ArgumentParser:
       choices=["auto", "jsonl", "raw", "json"],
       default="auto",
       help="Output formatting style (default: auto based on extension)",
+  )
+
+  # Command: rules
+  rules_p = subparsers.add_parser(
+      "rules",
+      help="Inspect, search, and synchronize Google SecOps YARA-L detection rules",
+  )
+  rules_sub = rules_p.add_subparsers(dest="rules_action", required=True)
+
+  # rules sync
+  sync_p = rules_sub.add_parser("sync", help="Synchronize and cache rules from Google SecOps tenant")
+  sync_p.add_argument(
+      "--filter",
+      default='rule_owner:"*"',
+      help='Filter expression for Chronicle custom rules API (default: rule_owner:"*")',
+  )
+  sync_p.add_argument(
+      "--curated",
+      action="store_true",
+      help="Synchronize Google Curated Detection rules from Content Hub",
+  )
+  sync_p.add_argument(
+      "--all",
+      action="store_true",
+      help="Synchronize both Custom rules and Content Hub Curated rules",
+  )
+  sync_p.add_argument(
+      "--max-rules",
+      type=int,
+      help="Maximum number of rules to download (defaults to all)",
+  )
+
+  # rules list
+  list_rules_p = rules_sub.add_parser("list", help="List and search cached detection rules")
+  list_rules_p.add_argument(
+      "--type",
+      choices=["all", "curated", "custom"],
+      default="all",
+      help="Filter by rule type: 'curated' (Google Curated), 'custom' (Customer rules), or 'all' (default: all)",
+  )
+  list_rules_p.add_argument(
+      "--technique",
+      "-t",
+      help="Filter by MITRE ATT&CK technique ID (e.g. T1564, T1059.001)",
+  )
+  list_rules_p.add_argument(
+      "--tactic",
+      help="Filter by MITRE ATT&CK tactic ID (e.g. TA0005, TA0002)",
+  )
+  list_rules_p.add_argument(
+      "--search",
+      "-s",
+      help="Keyword search in rule name, ID, or YARA-L logic",
+  )
+  list_rules_p.add_argument(
+      "--live-only",
+      action="store_true",
+      help="Show only rules with liveModeEnabled=True",
+  )
+  list_rules_p.add_argument(
+      "--limit",
+      type=int,
+      default=100,
+      help="Maximum number of rules to display (default: 100)",
+  )
+
+  # rules show
+  show_rule_p = rules_sub.add_parser("show", help="Display YARA-L code and trigger analysis for a rule")
+  show_rule_p.add_argument(
+      "rule",
+      help="Rule name, rule ID, or path to local .yaral/.json file",
+  )
+  show_rule_p.add_argument(
+      "--raw",
+      action="store_true",
+      help="Show raw YARA-L rule code only",
   )
 
   # Command: list
@@ -272,8 +368,16 @@ def main(args: Optional[List[str]] = None) -> int:
       return 1
 
   elif parsed.command == "generate":
-    if not parsed.scenario and not getattr(parsed, "from_case", None):
-      print("Error: Please provide either --scenario or --from-case.", file=sys.stderr)
+    if (
+        not parsed.scenario
+        and not getattr(parsed, "from_case", None)
+        and not getattr(parsed, "from_rule", None)
+        and not getattr(parsed, "from_technique", None)
+    ):
+      print(
+          "Error: Please provide --scenario, --from-case, --from-rule, or --from-technique.",
+          file=sys.stderr,
+      )
       return 1
 
     try:
@@ -292,7 +396,50 @@ def main(args: Optional[List[str]] = None) -> int:
       print("[GTI Agent] Querying Google Threat Intelligence Agent for real-world threat model & indicators...")
 
     try:
-      if getattr(parsed, "from_case", None):
+      if getattr(parsed, "from_rule", None) or getattr(parsed, "from_technique", None):
+        target_rule = None
+        if getattr(parsed, "from_technique", None):
+          tech_id = parsed.from_technique.upper()
+          print(f"Searching for detection rules tagged with MITRE ATT&CK technique '{tech_id}'...")
+          matches = client.list_rules(technique=tech_id)
+          if not matches:
+            print(f"No rules matching '{tech_id}' found in local cache. Attempting to sync rules from Google SecOps...")
+            try:
+              client.sync_rules(max_rules=500)
+              matches = client.list_rules(technique=tech_id)
+            except Exception as sync_err:
+              print(f"Warning: Rule sync failed ({sync_err})", file=sys.stderr)
+          if not matches:
+            print(f"Error: No detection rules found for technique '{tech_id}'.", file=sys.stderr)
+            return 1
+          target_rule = matches[0]
+          print(f"Found {len(matches)} matching rule(s). Selected '{target_rule.display_name}' ({target_rule.rule_id}).")
+        else:
+          target_rule = client.get_rule(parsed.from_rule)
+          if not target_rule:
+            print(f"Error: Could not find rule '{parsed.from_rule}'.", file=sys.stderr)
+            return 1
+
+        print(f"Analyzing detection rule '{target_rule.display_name}' ({target_rule.rule_id})...")
+        analysis = client.analyze_rule(target_rule)
+        print(f"  • Techniques: {', '.join(analysis.techniques) or 'N/A'}")
+        print(f"  • Event Types: {', '.join(analysis.event_types) or 'N/A'}")
+        print(f"  • Suggested Log Types: {', '.join(analysis.suggested_log_types)}")
+        print(f"  • Generation Objective: {parsed.rule_outcome.upper()}")
+
+        if parsed.types:
+          log_types = [t.strip() for t in parsed.types.split(",") if t.strip()]
+        else:
+          log_types = analysis.suggested_log_types[:2] if analysis.suggested_log_types else ["WINDOWS_SYSMON"]
+          print(f"  • Auto-selected Log Types: {', '.join(log_types)}")
+
+        scenario = client.generate_from_rule(
+            rule=target_rule,
+            log_types=log_types,
+            outcome=parsed.rule_outcome,
+            count=parsed.rule_count,
+        )
+      elif getattr(parsed, "from_case", None):
         case_file = Path(parsed.from_case).expanduser()
         if not case_file.exists():
           print(f"Error: Case file '{case_file}' does not exist.", file=sys.stderr)
@@ -509,6 +656,104 @@ def main(args: Optional[List[str]] = None) -> int:
       else:
         print(f"[Error] Could not find scenario '{parsed.id}' to delete.", file=sys.stderr)
         return 1
+      return 0
+
+  elif parsed.command == "rules":
+    action = getattr(parsed, "rules_action", None)
+    if action == "sync":
+      print(f"Connecting to Google SecOps (Customer: {client.config.customer_id}, Region: {client.config.region})...")
+      
+      sync_curated = parsed.curated or parsed.all
+      sync_custom = not parsed.curated or parsed.all
+
+      if sync_curated:
+        print("\nHarvesting Curated Detection Rules from Content Hub...")
+        def progress_curated(batch, total):
+          print(f"  • Downloaded {batch} curated rules (Total: {total})...")
+        try:
+          curated_rules = client.rule_service.sync_curated_rules(
+              progress_callback=progress_curated,
+          )
+          print(f"\nSuccessfully synced and cached {len(curated_rules)} curated rules to {client.rule_service.curated_cache_file}!")
+        except Exception as e:
+          print(f"[Error] Failed to harvest curated rules: {e}", file=sys.stderr)
+          return 1
+
+      if sync_custom:
+        print("\nDownloading Custom YARA-L detection rules...")
+        def progress(batch, total):
+          print(f"  • Downloaded {batch} rules (Total: {total})...")
+        try:
+          rules = client.rule_service.sync_rules(
+              rule_filter=parsed.filter,
+              max_rules=parsed.max_rules,
+              progress_callback=progress,
+          )
+          print(f"\nSuccessfully synced and cached {len(rules)} custom rules to {client.rule_service.cache_file}!")
+        except Exception as e:
+          print(f"\n[Error] Failed to sync custom rules from Google SecOps: {e}", file=sys.stderr)
+          return 1
+      return 0
+
+    elif action == "list":
+      rule_type = getattr(parsed, "type", "all")
+      rules = client.rule_service.list_rules(
+          query=parsed.search,
+          technique=parsed.technique,
+          tactic=parsed.tactic,
+          live_only=parsed.live_only,
+          rule_type=rule_type,
+      )
+      if not rules:
+        print("No rules found matching query.")
+        print("Tip: Run 'logjammer rules sync --curated' or 'logjammer rules sync' to download the rule catalog.")
+        return 0
+      print(f"{'Rule ID':<38} {'Display Name':<42} {'Type':<12} {'Live':<6} {'Techniques'}")
+      print("-" * 125)
+      limit = max(1, parsed.limit) if getattr(parsed, "limit", None) else 100
+      for r in rules[:limit]:
+        tech_str = ", ".join(r.techniques[:3])
+        live_str = "YES" if r.live_mode_enabled else "NO"
+        rtype = "Curated" if r.rule_owner == "GOOGLE_CURATED" else "Custom"
+        print(f"{r.rule_id:<38} {r.display_name[:40]:<42} {rtype:<12} {live_str:<6} {tech_str}")
+      if len(rules) > limit:
+        print(f"\n... and {len(rules) - limit} more rules. Filter by --search, --type, --technique, --tactic, or --limit.")
+      return 0
+
+    elif action == "show":
+      rule = client.get_rule(parsed.rule)
+      if not rule:
+        print(f"[Error] Rule '{parsed.rule}' not found in local cache, local files, or SecOps API.", file=sys.stderr)
+        return 1
+
+      if parsed.raw:
+        print(rule.text)
+        return 0
+
+      print("=" * 80)
+      print(f"RULE: {rule.display_name} ({rule.rule_id})")
+      print("=" * 80)
+      print(f"Severity:   {rule.severity}")
+      print(f"Live Mode:  {'ENABLED' if rule.live_mode_enabled else 'DISABLED'}")
+      if rule.author:
+        print(f"Author:     {rule.author}")
+      if rule.techniques:
+        print(f"MITRE Tech: {', '.join(rule.techniques)}")
+      if rule.tactics:
+        print(f"MITRE Tac:  {', '.join(rule.tactics)}")
+      if rule.description:
+        print(f"Description: {rule.description}")
+
+      analysis = client.analyze_rule(rule)
+      print("\n" + "-" * 80)
+      print("TRIGGER CONDITION ANALYSIS")
+      print("-" * 80)
+      print(analysis.summary)
+
+      print("\n" + "-" * 80)
+      print("YARA-L 2.0 SOURCE CODE")
+      print("-" * 80)
+      print(rule.text)
       return 0
 
   elif parsed.command == "list":

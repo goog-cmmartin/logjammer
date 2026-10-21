@@ -36,6 +36,15 @@ These logs capture activity across Google Workspace core applications, administr
 
 ## 3. Schema Breakdown & Fields
 
+> [!CAUTION]
+> **CRITICAL CHRONICLE / SECOPS PARSER INVARIANT:**
+> The Chronicle `WORKSPACE_ACTIVITY` parser (v27.0) **requires** the `events` array structure.
+> **DO NOT** place `"type"`, `"name"`, or `"parameters"` at the top level of the JSON document! If placed at the root level, Chronicle will fail to categorize the activity and will normalize the entire record as `GENERIC_EVENT`.
+> - **WRONG (Causes GENERIC_EVENT):**
+>   `{"kind":"admin#reports#activity", "type":"login", "name":"login_success", "parameters":[...]}`
+> - **CORRECT (Normalizes to USER_LOGIN, etc.):**
+>   `{"kind":"admin#reports#activity", "events":[{"type":"login", "name":"login_success", "parameters":[...]}]}`
+
 ### Top-Level Object Schema
 
 | Field Name | Type | Required? | Description / Allowed Values |
@@ -164,7 +173,10 @@ Every element in `parameters[]` consists of a `name` key and **exactly one** typ
 
 ## 6. Key Constraints & Generation Pitfalls
 
-1. **Parameter Typing Integrity**:
+1. **Mandatory `events` Envelope (No Flat Event Fields)**:
+   - `events` is **always** an array of JSON objects containing `{"type": "...", "name": "...", "parameters": [...]}`.
+   - **NEVER** output `type`, `name`, or `parameters` at the root JSON level. If you output them at root level, Google SecOps parses the event as `GENERIC_EVENT` instead of `USER_LOGIN` / `USER_RESOURCE_CREATION`.
+2. **Parameter Typing Integrity**:
    - **Never** put raw text into `boolValue` or `intValue`.
    - `boolValue` must be `true` or `false` (literal JSON boolean, not `"true"` or `"false"` string).
    - `intValue` must be passed as a **string containing numbers** (e.g., `"1627401023860"`), **not** a bare JSON number.

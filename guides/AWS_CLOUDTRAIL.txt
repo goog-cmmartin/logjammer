@@ -38,7 +38,7 @@
 | `eventName` | String | **Yes** | API action name (e.g., `ConsoleLogin`, `AssumeRole`, `CreateUser`, `PutObject`, `AttachRolePolicy`, `DeleteSecurityGroup`). |
 | `awsRegion` | String | **Yes** | AWS region name (e.g., `us-east-1`, `us-west-2`, `eu-west-1`, `ap-northeast-1`). Note: IAM and Sign-in events generally default to `us-east-1`. |
 | `sourceIPAddress` | String | **Yes** | Client IPv4/IPv6 address (`198.51.100.25`, `2001:db8::1`) or internal AWS service domain (`lambda.amazonaws.com`, `autoscaling.amazonaws.com`, `AWS Internal`). |
-| `userAgent` | String | **Yes** | Client identifier (e.g., `aws-cli/2.11.0 Python/3.10 Linux/5.10`, `console.amazonaws.com`, `Boto3/1.26.0`, `aws-sdk-go/1.44.0`, or standard browser User-Agents). |
+| `userAgent` | String | **Yes** | Client identifier (e.g., `aws-cli/2.11.0 Python/3.10 Linux/5.10`, `console.amazonaws.com`, `Boto3/1.26.0`, `aws-sdk-go/1.44.0`, or standard browser User-Agents). For offensive security / pentest scenarios, tools such as `Pacu`, `Cloudfox`, `scoutsuite`, `trufflehog`, or `Prowler` are frequently seen and trigger high-precision detection rules. |
 | `eventType` | String | **Yes** | Category of event: `"AwsApiCall"`, `"AwsConsoleSignIn"`, `"AwsServiceEvent"`. |
 | `eventCategory` | String | No | Event categorization: `"Management"`, `"Data"`, or `"Insight"`. |
 | `readOnly` | Boolean | No | `true` for read actions (`Describe*`, `Get*`, `List*`), `false` for mutating actions (`Create*`, `Delete*`, `Put*`). |
@@ -70,7 +70,7 @@ Identifies the principal requesting the action. Its internal schema changes base
 
 #### Principal ID & Access Key Prefixes:
 * **IAM User Principal ID**: `AIDA...` (e.g., `AIDAI4567EXAMPLE12345`)
-* **Role Principal ID**: `AROA...` (e.g., `AROATSOMMFOOHBV3O2BAR`)
+* **Role Principal ID**: `AROA...` (e.g., `AROA0000000000EXAMPLE`)
 * **Assumed Role Principal ID Format**: `AROA...:<session-name>`
 * **Permanent Access Key**: `AKIA...` (e.g., `AKIA0000000000EXAMPLE`)
 * **Temporary Session Access Key**: `ASIA...` (e.g., `ASIA0000000000EXAMPLE`)
@@ -142,7 +142,7 @@ When generating synthetic data, insert dynamic timestamp placeholders:
       "eventVersion": "1.08",
       "userIdentity": {
         "type": "WebIdentityUser",
-        "principalId": "AROA3XDYTGVB5EXAMPLE:kube-system-aws-node",
+        "principalId": "AROA0000000000EXAMPLE:kube-system-aws-node",
         "userName": "system:serviceaccount:kube-system:aws-node",
         "identityProvider": "arn:aws:iam::123456789012:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/D89B5F9901C2F70891A9C8D67890EF12",
         "arn": "arn:aws:sts::123456789012:assumed-role/eks-cni-node-role/kube-system-aws-node",
@@ -166,7 +166,7 @@ When generating synthetic data, insert dynamic timestamp placeholders:
           "sessionToken": "IQoJb3JpZ2luX2VjEOb//////////wEaCXVzLWVhc3QtMSJHMEUCIBnEXAMPLE"
         },
         "assumedRoleUser": {
-          "assumedRoleId": "AROA3XDYTGVB5EXAMPLE:kube-system-aws-node",
+          "assumedRoleId": "AROA0000000000EXAMPLE:kube-system-aws-node",
           "arn": "arn:aws:sts::123456789012:assumed-role/eks-cni-node-role/kube-system-aws-node"
         },
         "subjectFromWebIdentityToken": "system:serviceaccount:kube-system:aws-node"
@@ -268,14 +268,14 @@ When generating synthetic data, insert dynamic timestamp placeholders:
       "eventVersion": "1.08",
       "userIdentity": {
         "type": "AssumedRole",
-        "principalId": "AROAEXAMPLEADMINROLE:terraform-deployer",
+        "principalId": "AROA0000000000EXAMPLE:terraform-deployer",
         "arn": "arn:aws:sts::123456789012:assumed-role/TerraformExecutionRole/terraform-deployer",
         "accountId": "123456789012",
         "accessKeyId": "ASIA0000000000EXAMPLE",
         "sessionContext": {
           "sessionIssuer": {
             "type": "Role",
-            "principalId": "AROAEXAMPLEADMINROLE",
+            "principalId": "AROA0000000000EXAMPLE",
             "arn": "arn:aws:iam::123456789012:role/TerraformExecutionRole",
             "accountId": "123456789012",
             "userName": "TerraformExecutionRole"

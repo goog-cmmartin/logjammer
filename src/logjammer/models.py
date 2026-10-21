@@ -152,3 +152,76 @@ class LearnResult:
   guide_path: Optional[Path] = None
   sample_count: int = 0
   files_analyzed: int = 1
+
+
+@dataclass
+class SecOpsRule:
+  """Represents a Google SecOps (Chronicle) YARA-L rule."""
+
+  rule_id: str
+  display_name: str
+  text: str = ""
+  severity: str = "Medium"
+  description: Optional[str] = None
+  author: Optional[str] = None
+  rule_owner: Optional[str] = None
+  live_mode_enabled: bool = False
+  tactics: List[str] = field(default_factory=list)
+  techniques: List[str] = field(default_factory=list)
+  tags: List[str] = field(default_factory=list)
+  raw_data: Dict[str, Any] = field(default_factory=dict)
+
+  def to_dict(self) -> Dict[str, Any]:
+    return {
+        "rule_id": self.rule_id,
+        "display_name": self.display_name,
+        "text": self.text,
+        "severity": self.severity,
+        "description": self.description,
+        "author": self.author,
+        "rule_owner": self.rule_owner,
+        "live_mode_enabled": self.live_mode_enabled,
+        "tactics": self.tactics,
+        "techniques": self.techniques,
+        "tags": self.tags,
+    }
+
+  @classmethod
+  def from_dict(cls, data: Dict[str, Any]) -> "SecOpsRule":
+    return cls(
+        rule_id=data.get("rule_id") or data.get("name", "").split("/")[-1],
+        display_name=data.get("display_name") or data.get("displayName", "Unnamed Rule"),
+        text=data.get("text", "") or data.get("ruleText", ""),
+        severity=data.get("severity") if isinstance(data.get("severity"), str) else data.get("severity", {}).get("displayName", "Medium"),
+        description=data.get("description"),
+        author=data.get("author"),
+        rule_owner=data.get("rule_owner") or data.get("ruleOwner"),
+        live_mode_enabled=bool(data.get("live_mode_enabled") or data.get("liveModeEnabled", False)),
+        tactics=data.get("tactics", []),
+        techniques=data.get("techniques", []),
+        tags=data.get("tags", []),
+        raw_data=data,
+    )
+
+
+@dataclass
+class RuleAnalysis:
+  """Deconstructed representation of a YARA-L rule for log synthesis."""
+
+  rule_id: str
+  display_name: str
+  rule_text: str
+  tactics: List[str] = field(default_factory=list)
+  techniques: List[str] = field(default_factory=list)
+  event_types: List[str] = field(default_factory=list)
+  required_fields: List[str] = field(default_factory=list)
+  positive_constraints: Dict[str, List[str]] = field(default_factory=dict)
+  negative_exclusions: Dict[str, List[str]] = field(default_factory=dict)
+  suggested_log_types: List[str] = field(default_factory=list)
+  is_multi_event: bool = False
+  match_window: Optional[str] = None
+  threshold_count: int = 1
+  summary: str = ""
+
+  def to_dict(self) -> Dict[str, Any]:
+    return asdict(self)
