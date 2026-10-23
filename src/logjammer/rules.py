@@ -1,6 +1,6 @@
 """Google SecOps (Chronicle) rule management and retrieval service."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 import logging
 import os
@@ -22,6 +22,45 @@ def slugify(s: str) -> str:
     return "uncategorized"
   cleaned = re.sub(r"[^\w]+", "_", s.strip().lower()).strip("_")
   return cleaned or "uncategorized"
+
+
+def parse_date_spec(spec: Optional[str]) -> Optional[datetime]:
+  """Parse an ISO date/timestamp or relative duration (e.g. '30d', '24h', '2026-01-01') into UTC datetime."""
+  if not spec or not spec.strip():
+    return None
+  s = spec.strip()
+  # Check relative duration e.g. 7d, 30d, 24h, 6m (months), 1y
+  rel_match = re.match(r"^(\d+)\s*([dhwmy])$", s.lower())
+  if rel_match:
+    val = int(rel_match.group(1))
+    unit = rel_match.group(2)
+    now = datetime.now(timezone.utc)
+    if unit == "h":
+      return now - timedelta(hours=val)
+    if unit == "d":
+      return now - timedelta(days=val)
+    if unit == "w":
+      return now - timedelta(weeks=val)
+    if unit == "m":
+      return now - timedelta(days=val * 30)
+    if unit == "y":
+      return now - timedelta(days=val * 365)
+
+  # Handle trailing Z or YYYY-MM format
+  if re.match(r"^\d{4}-\d{2}$", s):
+    s = f"{s}-01T00:00:00+00:00"
+  elif re.match(r"^\d{4}-\d{2}-\d{2}$", s):
+    s = f"{s}T00:00:00+00:00"
+  elif s.endswith("Z"):
+    s = s[:-1] + "+00:00"
+
+  try:
+    dt = datetime.fromisoformat(s)
+    if dt.tzinfo is None:
+      dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+  except ValueError:
+    return None
 
 
 def extract_mitre_ids(rule_data: Dict[str, Any], text: str = "") -> tuple[List[str], List[str]]:
@@ -161,6 +200,8 @@ class RuleService:
       for r in raw_rules:
         text = r.get("text", "") or r.get("ruleText", "")
         techs, tacs = extract_mitre_ids(r, text)
+        create_time = r.get("createTime")
+        update_time = r.get("revisionCreateTime") or r.get("updateTime") or create_time
         r_obj = SecOpsRule(
             rule_id=r.get("name", "").split("/")[-1],
             display_name=r.get("displayName", "Unnamed Rule"),
@@ -170,9 +211,11 @@ class RuleService:
                 if isinstance(r.get("severity"), str)
                 else r.get("severity", {}).get("displayName", "Medium")
             ),
-            description=r.get("description"),
+            description=r.get("description") or (r.get("metadata", {}).get("description") if isinstance(r.get("metadata"), dict) else None),
             author=r.get("author"),
-            rule_owner=r.get("ruleOwner"),
+            rule_owner=r.get("ruleOwner") or "CUSTOMER",
+            create_time=create_time,
+            update_time=update_time,
             live_mode_enabled=bool(r.get("liveModeEnabled", False)),
             tactics=tacs,
             techniques=techs,
@@ -296,6 +339,8 @@ class RuleService:
         )
         description = meta.get("description", "")
         author = meta.get("author", "Google Cloud Threat Intelligence")
+        create_time = meta.get("createTime") or r.get("createTime")
+        update_time = meta.get("updateTime") or r.get("updateTime") or create_time
 
         tech_objs = rule_content.get("techniques", [])
         techniques = [t.get("id") for t in tech_objs if t.get("id")]
@@ -325,6 +370,8 @@ class RuleService:
               f"// Category   : {primary_category}\n"
               f"// Severity   : {severity}\n"
               f"// Precision  : {precision}\n"
+              f"// Created    : {create_time or 'Unknown'}\n"
+              f"// Updated    : {update_time or 'Unknown'}\n"
               f"// MITRE Tech : {', '.join(techniques) if techniques else 'None'}\n"
               f"// MITRE Tacs : {', '.join(tactics) if tactics else 'None'}\n"
               f"// Author     : {author}\n"
@@ -355,6 +402,9 @@ class RuleService:
             description=description,
             author=author,
             rule_owner="GOOGLE_CURATED",
+            precision=precision,
+            create_time=create_time,
+            update_time=update_time,
             live_mode_enabled=live_status,
             tactics=tactics,
             techniques=techniques,
@@ -365,6 +415,8 @@ class RuleService:
                 "ruleset_name": ruleset_name,
                 "ruleset_id": ruleset_id,
                 "precision": precision,
+                "create_time": create_time,
+                "update_time": update_time,
                 "file_path": file_path_str,
             },
         )
@@ -391,7 +443,7 @@ class RuleService:
                 "category": r.raw_data.get("category", ""),
                 "ruleset_name": r.raw_data.get("ruleset_name", ""),
                 "ruleset_id": r.raw_data.get("ruleset_id", ""),
-                "precision": r.raw_data.get("precision", ""),
+                "precision": r.precision or r.raw_data.get("precision", ""),
                 "file_path": r.raw_data.get("file_path", ""),
             }
             for r in all_rules
@@ -448,10 +500,26 @@ class RuleService:
       tactic: Optional[str] = None,
       live_only: bool = False,
       rule_type: str = "all",
+      precision: Optional[str] = None,
+      created_after: Optional[str] = None,
+      created_before: Optional[str] = None,
+      updated_after: Optional[str] = None,
+      updated_before: Optional[str] = None,
+      sort_by: Optional[str] = None,
   ) -> List[SecOpsRule]:
     """Convenience alias for search_rules."""
     return self.search_rules(
-        query=query, technique=technique, tactic=tactic, live_only=live_only, rule_type=rule_type
+        query=query,
+        technique=technique,
+        tactic=tactic,
+        live_only=live_only,
+        rule_type=rule_type,
+        precision=precision,
+        created_after=created_after,
+        created_before=created_before,
+        updated_after=updated_after,
+        updated_before=updated_before,
+        sort_by=sort_by,
     )
 
   def get_rule(self, identifier: str) -> Optional[SecOpsRule]:
@@ -471,6 +539,12 @@ class RuleService:
       techs, tacs = extract_mitre_ids({}, content)
       rule_name_match = re.search(r"rule\s+([A-Za-z0-9_]+)", content)
       display_name = rule_name_match.group(1) if rule_name_match else file_path.stem
+      prec_match = re.search(r"//\s*Precision\s*:\s*([A-Za-z_]+)", content)
+      precision = prec_match.group(1).upper() if prec_match else None
+      created_match = re.search(r"//\s*Created\s*:\s*([^\r\n]+)", content)
+      updated_match = re.search(r"//\s*Updated\s*:\s*([^\r\n]+)", content)
+      create_time = created_match.group(1).strip() if created_match and created_match.group(1).strip() != "Unknown" else None
+      update_time = updated_match.group(1).strip() if updated_match and updated_match.group(1).strip() != "Unknown" else None
       return SecOpsRule(
           rule_id=file_path.stem,
           display_name=display_name,
@@ -478,6 +552,9 @@ class RuleService:
           techniques=techs,
           tactics=tacs,
           rule_owner="LOCAL",
+          precision=precision,
+          create_time=create_time,
+          update_time=update_time,
       )
 
     # 2. Check cached rules (both custom and curated)
@@ -509,6 +586,8 @@ class RuleService:
         r = json.loads(resp.read().decode("utf-8"))
       text = r.get("text", "") or r.get("ruleText", "")
       techs, tacs = extract_mitre_ids(r, text)
+      create_time = r.get("createTime")
+      update_time = r.get("revisionCreateTime") or r.get("updateTime") or create_time
       return SecOpsRule(
           rule_id=r.get("name", "").split("/")[-1],
           display_name=r.get("displayName", "Unnamed Rule"),
@@ -521,6 +600,8 @@ class RuleService:
           description=r.get("description"),
           author=r.get("author"),
           rule_owner=r.get("ruleOwner") or "CUSTOMER",
+          create_time=create_time,
+          update_time=update_time,
           live_mode_enabled=bool(r.get("liveModeEnabled", False)),
           tactics=tacs,
           techniques=techs,
@@ -538,6 +619,12 @@ class RuleService:
       tactic: Optional[str] = None,
       live_only: bool = False,
       rule_type: str = "all",
+      precision: Optional[str] = None,
+      created_after: Optional[str] = None,
+      created_before: Optional[str] = None,
+      updated_after: Optional[str] = None,
+      updated_before: Optional[str] = None,
+      sort_by: Optional[str] = None,
       rules: Optional[List[SecOpsRule]] = None,
   ) -> List[SecOpsRule]:
     """Search and filter rules."""
@@ -547,6 +634,16 @@ class RuleService:
     q_lower = query.lower() if query else None
     t_upper = technique.upper() if technique else None
     tac_upper = tactic.upper() if tactic else None
+    prec_upper = (
+        precision.strip().upper()
+        if precision and precision.strip().lower() != "all"
+        else None
+    )
+
+    c_after_dt = parse_date_spec(created_after)
+    c_before_dt = parse_date_spec(created_before)
+    u_after_dt = parse_date_spec(updated_after)
+    u_before_dt = parse_date_spec(updated_before)
 
     for r in corpus:
       if rule_type != "all":
@@ -554,12 +651,32 @@ class RuleService:
           continue
         if rule_type == "custom" and r.rule_owner == "GOOGLE_CURATED":
           continue
+      if prec_upper:
+        rule_prec = (r.precision or r.raw_data.get("precision") or "").upper()
+        if rule_prec != prec_upper:
+          continue
       if live_only and not r.live_mode_enabled:
         continue
       if t_upper and t_upper not in r.techniques:
         continue
       if tac_upper and tac_upper not in r.tactics:
         continue
+      if c_after_dt or c_before_dt:
+        r_created = parse_date_spec(r.create_time)
+        if not r_created:
+          continue
+        if c_after_dt and r_created < c_after_dt:
+          continue
+        if c_before_dt and r_created > c_before_dt:
+          continue
+      if u_after_dt or u_before_dt:
+        r_updated = parse_date_spec(r.update_time or r.create_time)
+        if not r_updated:
+          continue
+        if u_after_dt and r_updated < u_after_dt:
+          continue
+        if u_before_dt and r_updated > u_before_dt:
+          continue
       if q_lower:
         match_query = (
             q_lower in r.display_name.lower()
@@ -570,5 +687,17 @@ class RuleService:
         if not match_query:
           continue
       results.append(r)
+
+    effective_sort = sort_by or ("updated" if (u_after_dt or u_before_dt) else ("created" if (c_after_dt or c_before_dt) else None))
+    if effective_sort:
+      s_key = effective_sort.lower()
+      if s_key == "updated":
+        results.sort(key=lambda x: x.update_time or x.create_time or "", reverse=True)
+      elif s_key == "created":
+        results.sort(key=lambda x: x.create_time or "", reverse=True)
+      elif s_key == "name":
+        results.sort(key=lambda x: x.display_name.lower())
+      elif s_key == "id":
+        results.sort(key=lambda x: x.rule_id.lower())
 
     return results

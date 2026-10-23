@@ -10,7 +10,7 @@ from unittest import mock
 from logjammer.config import LogJammerConfig
 from logjammer.models import GeneratedScenario, LogEntry, LogFormat, RuleAnalysis, SecOpsRule
 from logjammer.rule_analyzer import RuleAnalyzer
-from logjammer.rules import RuleService
+from logjammer.rules import RuleService, parse_date_spec
 from logjammer.generator import ScenarioGenerator
 
 
@@ -206,6 +206,7 @@ class RuleServiceTest(unittest.TestCase):
     self.assertEqual(rule.rule_id, "ru_12345")
     self.assertEqual(rule.display_name, "Suspicious AWS IAM Activity")
     self.assertEqual(rule.rule_owner, "GOOGLE_CURATED")
+    self.assertEqual(rule.precision, "PRECISE")
     self.assertEqual(rule.techniques, ["T1078.004"])
     self.assertEqual(rule.tactics, ["TA0001"])
     self.assertTrue(rule.live_mode_enabled)
@@ -292,10 +293,24 @@ class RuleGenerationTest(unittest.TestCase):
                   "description": "Detects malware transfer in Chrome",
                   "author": "Google Cloud Threat Intelligence",
                   "rule_owner": "GOOGLE_CURATED",
+                  "precision": "PRECISE",
                   "live_mode_enabled": True,
                   "techniques": ["T1204.002"],
                   "tactics": ["TA0002"],
-              }
+              },
+              {
+                  "rule_id": "ur_curated_02",
+                  "display_name": "Broad Network Activity",
+                  "text": "rule broad_net { condition: $e }",
+                  "severity": "Low",
+                  "description": "Broad rule",
+                  "author": "Google Cloud Threat Intelligence",
+                  "rule_owner": "GOOGLE_CURATED",
+                  "precision": "BROAD",
+                  "live_mode_enabled": True,
+                  "techniques": ["T1071"],
+                  "tactics": ["TA0011"],
+              },
           ]
       }
       curated_file.write_text(json.dumps(mock_curated), encoding="utf-8")
@@ -322,13 +337,24 @@ class RuleGenerationTest(unittest.TestCase):
 
       # Test loading all
       all_rules = service.load_rules_from_cache(rule_type="all")
-      self.assertEqual(len(all_rules), 2)
+      self.assertEqual(len(all_rules), 3)
 
       # Test filtering curated only
       curated_rules = service.search_rules(rule_type="curated")
-      self.assertEqual(len(curated_rules), 1)
+      self.assertEqual(len(curated_rules), 2)
       self.assertEqual(curated_rules[0].rule_id, "ur_curated_01")
       self.assertEqual(curated_rules[0].rule_owner, "GOOGLE_CURATED")
+
+      # Test filtering curated by precision
+      precise_rules = service.search_rules(rule_type="curated", precision="precise")
+      self.assertEqual(len(precise_rules), 1)
+      self.assertEqual(precise_rules[0].rule_id, "ur_curated_01")
+      self.assertEqual(precise_rules[0].precision, "PRECISE")
+
+      broad_rules = service.search_rules(rule_type="curated", precision="broad")
+      self.assertEqual(len(broad_rules), 1)
+      self.assertEqual(broad_rules[0].rule_id, "ur_curated_02")
+      self.assertEqual(broad_rules[0].precision, "BROAD")
 
       # Test filtering custom only
       custom_rules = service.search_rules(rule_type="custom")
@@ -339,6 +365,116 @@ class RuleGenerationTest(unittest.TestCase):
       retrieved = service.get_rule("ur_curated_01")
       self.assertIsNotNone(retrieved)
       self.assertEqual(retrieved.display_name, "Google Workspace Chrome Malware Transfer")
+
+  def test_date_filtering_and_sorting(self):
+    with tempfile.TemporaryDirectory() as tmp_dir:
+      tmp_path = Path(tmp_dir)
+      cfg = LogJammerConfig(rules_dir=tmp_path)
+      service = RuleService(cfg)
+
+      curated_file = tmp_path / "curated_catalog.json"
+      mock_curated = {
+          "synced_at": "2026-10-23T12:00:00Z",
+          "rules": [
+              {
+                  "rule_id": "ur_old_01",
+                  "display_name": "Older Rule",
+                  "text": "rule older_rule { condition: $e }",
+                  "severity": "Medium",
+                  "rule_owner": "GOOGLE_CURATED",
+                  "precision": "PRECISE",
+                  "create_time": "2025-01-15T00:00:00Z",
+                  "update_time": "2025-06-01T00:00:00Z",
+              },
+              {
+                  "rule_id": "ur_new_02",
+                  "display_name": "Recent PHP2Shell Rule",
+                  "text": "rule php2shell { condition: $e }",
+                  "severity": "High",
+                  "rule_owner": "GOOGLE_CURATED",
+                  "precision": "BROAD",
+                  "create_time": "2026-10-20T10:00:00Z",
+                  "update_time": "2026-10-21T15:30:00Z",
+              },
+          ],
+      }
+      curated_file.write_text(json.dumps(mock_curated), encoding="utf-8")
+
+      # Filter by updated_after
+      recent = service.search_rules(updated_after="2026-10-01")
+      self.assertEqual(len(recent), 1)
+      self.assertEqual(recent[0].rule_id, "ur_new_02")
+
+      # Filter by created_before
+      older = service.search_rules(created_before="2026-01-01")
+      self.assertEqual(len(older), 1)
+      self.assertEqual(older[0].rule_id, "ur_old_01")
+
+      # Sort by updated descending
+      sorted_rules = service.search_rules(sort_by="updated")
+      self.assertEqual([r.rule_id for r in sorted_rules], ["ur_new_02", "ur_old_01"])
+
+      # Verify parse_date_spec handles ISO and relative specs
+      dt_iso = parse_date_spec("2026-10-01")
+      self.assertIsNotNone(dt_iso)
+      self.assertEqual(dt_iso.year, 2026)
+      dt_rel = parse_date_spec("7d")
+      self.assertIsNotNone(dt_rel)
+
+  @mock.patch.object(ScenarioGenerator, "generate")
+  def test_generate_from_multiple_rules_with_narrative(self, mock_generate):
+    mock_sc = GeneratedScenario(
+        title="Multi-Rule Attack Chain",
+        description="Generated logs to trigger chain",
+        logs={},
+    )
+    mock_generate.return_value = mock_sc
+
+    r1 = SecOpsRule(
+        rule_id="ur_http",
+        display_name="ttp_network_php_oom",
+        rule_owner="GOOGLE_CURATED",
+        text="""
+        rule ttp_network_php_oom {
+          events:
+            $oom.metadata.event_type = "NETWORK_HTTP"
+            $probe.metadata.event_type = "NETWORK_HTTP"
+          match:
+            $ip over 2m
+          condition:
+            #oom >= 5 and #probe >= 20
+        }
+        """,
+    )
+    r2 = SecOpsRule(
+        rule_id="ur_linux",
+        display_name="ttp_linux_php2shell_rce",
+        rule_owner="GOOGLE_CURATED",
+        text="""
+        rule ttp_linux_php2shell_rce {
+          events:
+            $e.metadata.event_type = "PROCESS_LAUNCH"
+            re.regex($e.principal.process.file.full_path, `/usr/sbin/php-fpm`)
+          condition:
+            $e
+        }
+        """,
+    )
+
+    self.generator.generate_from_rule(
+        rule=[r1, r2],
+        outcome="fire",
+        scenario_context="Simulate PHP2Shell exploit chain",
+    )
+    self.assertTrue(mock_generate.called)
+    call_kwargs = mock_generate.call_args[1]
+    self.assertIn("TARGET YARA-L DETECTION RULE(S) (2 TOTAL)", call_kwargs["scenario"])
+    self.assertIn("Simulate PHP2Shell exploit chain", call_kwargs["scenario"])
+    self.assertIn("CLOUDFLARE", call_kwargs["log_types"])
+    self.assertIn("PAN_CORTEX_XDR_EVENTS", call_kwargs["log_types"])
+    # Threshold sum (#oom >= 5 and #probe >= 20 -> 25) + 1 for r2 = 26
+    self.assertIn("At least 25 events", call_kwargs["scenario"])
+    self.assertIn("at least 26 trigger events across the chain", call_kwargs["scenario"])
 
 
 if __name__ == "__main__":

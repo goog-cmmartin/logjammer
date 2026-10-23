@@ -38,8 +38,8 @@ except ImportError:
     SecOpsSink = None
 
 
-DEFAULT_CUSTOMER_ID = "a556547c-1cff-43ef-a2e4-cf5b12a865df"
-DEFAULT_PROJECT_ID = "37679061640"
+DEFAULT_CUSTOMER_ID = os.environ.get("SECOPS_CUSTOMER_ID", "YOUR_SECOPS_CUSTOMER_ID")
+DEFAULT_PROJECT_ID = os.environ.get("GOOGLE_CLOUD_PROJECT") or os.environ.get("GCP_PROJECT_NUMBER", "YOUR_GCP_PROJECT_ID")
 DEFAULT_REGION = "us"
 DEFAULT_SCENARIO_TAG = "case107625-curated-demo"
 
@@ -212,7 +212,7 @@ EVENT_SPECS = [
                         "arn": "arn:aws:iam::498752334630:user/castor.troy@wizuniversity.com",
                         "accountId": "498752334630",
                         "userName": "castor.troy@wizuniversity.com",
-                        "accessKeyId": "AKIA68C252EXMPLEKEY1"
+                        "accessKeyId": "AKIA0000000000EXAMPLE"
                     },
                     "eventTime": "{iso_ms}",
                     "eventSource": "sts.amazonaws.com",
@@ -296,7 +296,7 @@ EVENT_SPECS = [
                         "arn": "arn:aws:iam::498752334630:user/castor.troy@wizuniversity.com",
                         "accountId": "498752334630",
                         "userName": "castor.troy@wizuniversity.com",
-                        "accessKeyId": "AKIA68C252EXMPLEKEY1"
+                        "accessKeyId": "AKIA0000000000EXAMPLE"
                     },
                     "eventTime": "{iso_ms}",
                     "eventSource": "iam.amazonaws.com",
@@ -333,7 +333,7 @@ EVENT_SPECS = [
                         "arn": "arn:aws:iam::498752334630:user/castor.troy@wizuniversity.com",
                         "accountId": "498752334630",
                         "userName": "castor.troy@wizuniversity.com",
-                        "accessKeyId": "AKIA68C252EXMPLEKEY1"
+                        "accessKeyId": "AKIA0000000000EXAMPLE"
                     },
                     "eventTime": "{iso_ms}",
                     "eventSource": "s3.amazonaws.com",
@@ -373,7 +373,7 @@ EVENT_SPECS = [
                         "arn": "arn:aws:iam::498752334630:user/castor.troy@wizuniversity.com",
                         "accountId": "498752334630",
                         "userName": "castor.troy@wizuniversity.com",
-                        "accessKeyId": "AKIA68C252EXMPLEKEY1"
+                        "accessKeyId": "AKIA0000000000EXAMPLE"
                     },
                     "eventTime": "{iso_ms}",
                     "eventSource": "s3.amazonaws.com",
@@ -424,7 +424,7 @@ EVENT_SPECS = [
                         "arn": "arn:aws:iam::498752334630:user/castor.troy@wizuniversity.com",
                         "accountId": "498752334630",
                         "userName": "castor.troy@wizuniversity.com",
-                        "accessKeyId": "AKIA68C252EXMPLEKEY1"
+                        "accessKeyId": "AKIA0000000000EXAMPLE"
                     },
                     "eventTime": "{iso_ms}",
                     "eventSource": "ec2-instance-connect.amazonaws.com",
@@ -507,7 +507,7 @@ EVENT_SPECS = [
                         "arn": "arn:aws:iam::498752334630:user/castor.troy@wizuniversity.com",
                         "accountId": "498752334630",
                         "userName": "castor.troy@wizuniversity.com",
-                        "accessKeyId": "AKIA68C252EXMPLEKEY1"
+                        "accessKeyId": "AKIA0000000000EXAMPLE"
                     },
                     "eventTime": "{iso_ms}",
                     "eventSource": "ssm.amazonaws.com",

@@ -39,6 +39,17 @@ def create_parser() -> argparse.ArgumentParser:
       "--guides-dir",
       help="Custom directory storing schema guides",
   )
+  parser.add_argument(
+      "--vertexai",
+      action="store_true",
+      default=None,
+      help="Force using Vertex AI with Google Cloud Application Default Credentials (ADC)",
+  )
+  parser.add_argument(
+      "--vertex-location",
+      default=None,
+      help="Google Cloud region/location for Vertex AI (default: global)",
+  )
 
   subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -96,6 +107,15 @@ def create_parser() -> argparse.ArgumentParser:
   gen_p.add_argument(
       "--from-technique",
       help="MITRE ATT&CK technique ID (e.g. T1564, T1059.001) to find and generate trigger logs for",
+  )
+  gen_p.add_argument(
+      "--rule-precision",
+      "--precision",
+      dest="rule_precision",
+      type=str.lower,
+      choices=["all", "precise", "broad"],
+      default="all",
+      help="Filter rules by precision when using --from-technique: 'precise' (Alerting), 'broad', or 'all' (default: all)",
   )
   gen_p.add_argument(
       "--rule-outcome",
@@ -194,6 +214,20 @@ def create_parser() -> argparse.ArgumentParser:
       type=int,
       help="Maximum number of rules to download (defaults to all)",
   )
+  sync_p.add_argument(
+      "--customer-id",
+      "-c",
+      help="Google SecOps Customer ID (defaults to SECOPS_CUSTOMER_ID)",
+  )
+  sync_p.add_argument(
+      "--project",
+      "-p",
+      help="Google Cloud Project ID or Number (defaults to GOOGLE_CLOUD_PROJECT)",
+  )
+  sync_p.add_argument(
+      "--region",
+      help="Google SecOps region (default: us)",
+  )
 
   # rules list
   list_rules_p = rules_sub.add_parser("list", help="List and search cached detection rules")
@@ -202,6 +236,14 @@ def create_parser() -> argparse.ArgumentParser:
       choices=["all", "curated", "custom"],
       default="all",
       help="Filter by rule type: 'curated' (Google Curated), 'custom' (Customer rules), or 'all' (default: all)",
+  )
+  list_rules_p.add_argument(
+      "--precision",
+      "-p",
+      type=str.lower,
+      choices=["all", "precise", "broad"],
+      default="all",
+      help="Filter curated rules by precision: 'precise' (Alerting), 'broad', or 'all' (default: all)",
   )
   list_rules_p.add_argument(
       "--technique",
@@ -221,6 +263,32 @@ def create_parser() -> argparse.ArgumentParser:
       "--live-only",
       action="store_true",
       help="Show only rules with liveModeEnabled=True",
+  )
+  list_rules_p.add_argument(
+      "--updated-after",
+      "--since",
+      dest="updated_after",
+      help="Filter rules updated on or after date/duration (e.g. 2026-08-01 or 30d, 90d)",
+  )
+  list_rules_p.add_argument(
+      "--updated-before",
+      dest="updated_before",
+      help="Filter rules updated on or before date (e.g. 2026-10-01)",
+  )
+  list_rules_p.add_argument(
+      "--created-after",
+      dest="created_after",
+      help="Filter rules created on or after date/duration (e.g. 2026-01-01 or 90d)",
+  )
+  list_rules_p.add_argument(
+      "--created-before",
+      dest="created_before",
+      help="Filter rules created on or before date (e.g. 2026-10-01)",
+  )
+  list_rules_p.add_argument(
+      "--sort",
+      choices=["updated", "created", "name", "id"],
+      help="Sort rules by 'updated' (newest first), 'created' (newest first), 'name', or 'id'",
   )
   list_rules_p.add_argument(
       "--limit",
@@ -337,6 +405,11 @@ def main(args: Optional[List[str]] = None) -> int:
         gti_api_key=getattr(parsed, "gti_api_key", None),
         model=parsed.model,
         guides_dir=parsed.guides_dir,
+        customer_id=getattr(parsed, "customer_id", None),
+        project_id=getattr(parsed, "project", None),
+        region=getattr(parsed, "region", None),
+        vertexai=getattr(parsed, "vertexai", None),
+        vertex_location=getattr(parsed, "vertex_location", None),
     )
   except Exception as e:
     print(f"Configuration Error: {e}", file=sys.stderr)
@@ -400,44 +473,64 @@ def main(args: Optional[List[str]] = None) -> int:
         target_rule = None
         if getattr(parsed, "from_technique", None):
           tech_id = parsed.from_technique.upper()
-          print(f"Searching for detection rules tagged with MITRE ATT&CK technique '{tech_id}'...")
-          matches = client.list_rules(technique=tech_id)
+          rule_prec = getattr(parsed, "rule_precision", "all")
+          prec_note = f" (precision={rule_prec.upper()})" if rule_prec != "all" else ""
+          print(f"Searching for detection rules tagged with MITRE ATT&CK technique '{tech_id}'{prec_note}...")
+          matches = client.list_rules(technique=tech_id, precision=rule_prec)
           if not matches:
             print(f"No rules matching '{tech_id}' found in local cache. Attempting to sync rules from Google SecOps...")
             try:
               client.sync_rules(max_rules=500)
-              matches = client.list_rules(technique=tech_id)
+              matches = client.list_rules(technique=tech_id, precision=rule_prec)
             except Exception as sync_err:
               print(f"Warning: Rule sync failed ({sync_err})", file=sys.stderr)
           if not matches:
-            print(f"Error: No detection rules found for technique '{tech_id}'.", file=sys.stderr)
+            print(f"Error: No detection rules found for technique '{tech_id}'{prec_note}.", file=sys.stderr)
             return 1
-          target_rule = matches[0]
-          print(f"Found {len(matches)} matching rule(s). Selected '{target_rule.display_name}' ({target_rule.rule_id}).")
+          # Prefer PRECISE rules with executable YARA-L text first
+          matches.sort(
+              key=lambda r: (
+                  0 if (r.precision or r.raw_data.get("precision") or "").upper() == "PRECISE" else 1,
+                  0 if r.text else 1,
+              )
+          )
+          target_rules = [matches[0]]
+          print(f"Found {len(matches)} matching rule(s). Selected '{target_rules[0].display_name}' ({target_rules[0].rule_id}).")
         else:
-          target_rule = client.get_rule(parsed.from_rule)
-          if not target_rule:
-            print(f"Error: Could not find rule '{parsed.from_rule}'.", file=sys.stderr)
-            return 1
+          rule_ids = [r.strip() for r in parsed.from_rule.split(",") if r.strip()]
+          target_rules = []
+          for rid in rule_ids:
+            r_obj = client.get_rule(rid)
+            if not r_obj:
+              print(f"Error: Could not find rule '{rid}'.", file=sys.stderr)
+              return 1
+            target_rules.append(r_obj)
 
-        print(f"Analyzing detection rule '{target_rule.display_name}' ({target_rule.rule_id})...")
-        analysis = client.analyze_rule(target_rule)
-        print(f"  • Techniques: {', '.join(analysis.techniques) or 'N/A'}")
-        print(f"  • Event Types: {', '.join(analysis.event_types) or 'N/A'}")
-        print(f"  • Suggested Log Types: {', '.join(analysis.suggested_log_types)}")
+        inferred_log_types = []
+        for idx, target_rule in enumerate(target_rules, start=1):
+          prefix = f"[{idx}/{len(target_rules)}] " if len(target_rules) > 1 else ""
+          print(f"{prefix}Analyzing detection rule '{target_rule.display_name}' ({target_rule.rule_id})...")
+          analysis = client.analyze_rule(target_rule)
+          print(f"  • Techniques: {', '.join(analysis.techniques) or 'N/A'}")
+          print(f"  • Event Types: {', '.join(analysis.event_types) or 'N/A'}")
+          print(f"  • Suggested Log Types: {', '.join(analysis.suggested_log_types)}")
+          for lt in analysis.suggested_log_types[:2]:
+            if lt not in inferred_log_types:
+              inferred_log_types.append(lt)
         print(f"  • Generation Objective: {parsed.rule_outcome.upper()}")
 
         if parsed.types:
           log_types = [t.strip() for t in parsed.types.split(",") if t.strip()]
         else:
-          log_types = analysis.suggested_log_types[:2] if analysis.suggested_log_types else ["WINDOWS_SYSMON"]
+          log_types = inferred_log_types if inferred_log_types else ["WINDOWS_SYSMON"]
           print(f"  • Auto-selected Log Types: {', '.join(log_types)}")
 
         scenario = client.generate_from_rule(
-            rule=target_rule,
+            rule=target_rules if len(target_rules) > 1 else target_rules[0],
             log_types=log_types,
             outcome=parsed.rule_outcome,
             count=parsed.rule_count,
+            scenario_context=getattr(parsed, "scenario", None),
         )
       elif getattr(parsed, "from_case", None):
         case_file = Path(parsed.from_case).expanduser()
@@ -697,27 +790,37 @@ def main(args: Optional[List[str]] = None) -> int:
 
     elif action == "list":
       rule_type = getattr(parsed, "type", "all")
+      precision = getattr(parsed, "precision", "all")
       rules = client.rule_service.list_rules(
           query=parsed.search,
           technique=parsed.technique,
           tactic=parsed.tactic,
           live_only=parsed.live_only,
           rule_type=rule_type,
+          precision=precision,
+          created_after=getattr(parsed, "created_after", None),
+          created_before=getattr(parsed, "created_before", None),
+          updated_after=getattr(parsed, "updated_after", None),
+          updated_before=getattr(parsed, "updated_before", None),
+          sort_by=getattr(parsed, "sort", None),
       )
       if not rules:
         print("No rules found matching query.")
         print("Tip: Run 'logjammer rules sync --curated' or 'logjammer rules sync' to download the rule catalog.")
         return 0
-      print(f"{'Rule ID':<38} {'Display Name':<42} {'Type':<12} {'Live':<6} {'Techniques'}")
-      print("-" * 125)
+      print(f"{'Rule ID':<40} {'Display Name':<38} {'Type':<8} {'Precision':<10} {'Live':<5} {'Updated':<11} {'Techniques'}")
+      print("-" * 138)
       limit = max(1, parsed.limit) if getattr(parsed, "limit", None) else 100
       for r in rules[:limit]:
         tech_str = ", ".join(r.techniques[:3])
         live_str = "YES" if r.live_mode_enabled else "NO"
         rtype = "Curated" if r.rule_owner == "GOOGLE_CURATED" else "Custom"
-        print(f"{r.rule_id:<38} {r.display_name[:40]:<42} {rtype:<12} {live_str:<6} {tech_str}")
+        prec_str = r.precision or r.raw_data.get("precision") or "-"
+        upd_raw = r.update_time or r.create_time or ""
+        upd_str = upd_raw[:10] if len(upd_raw) >= 10 else "-"
+        print(f"{r.rule_id:<40} {r.display_name[:36]:<38} {rtype:<8} {prec_str:<10} {live_str:<5} {upd_str:<11} {tech_str}")
       if len(rules) > limit:
-        print(f"\n... and {len(rules) - limit} more rules. Filter by --search, --type, --technique, --tactic, or --limit.")
+        print(f"\n... and {len(rules) - limit} more rules. Filter by --search, --type, --precision, --updated-after, --created-after, --technique, or --limit.")
       return 0
 
     elif action == "show":
@@ -734,7 +837,13 @@ def main(args: Optional[List[str]] = None) -> int:
       print(f"RULE: {rule.display_name} ({rule.rule_id})")
       print("=" * 80)
       print(f"Severity:   {rule.severity}")
+      if rule.precision or rule.raw_data.get("precision"):
+        print(f"Precision:  {rule.precision or rule.raw_data.get('precision')}")
       print(f"Live Mode:  {'ENABLED' if rule.live_mode_enabled else 'DISABLED'}")
+      if rule.create_time:
+        print(f"Created:    {rule.create_time}")
+      if rule.update_time:
+        print(f"Updated:    {rule.update_time}")
       if rule.author:
         print(f"Author:     {rule.author}")
       if rule.techniques:

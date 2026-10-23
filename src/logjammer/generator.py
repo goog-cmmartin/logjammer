@@ -59,23 +59,23 @@ CRITICAL RULES:
 """
 
 RULE_SYSTEM_PROMPT = """You are an elite Detection Engineer and Security Telemetry Specialist.
-Your task is to reverse-engineer and generate synthetic raw logs that will be parsed by Google SecOps (Chronicle SIEM) and trigger a specific YARA-L 2.0 detection rule.
+Your task is to reverse-engineer and generate synthetic raw logs that will be parsed by Google SecOps (Chronicle SIEM) and trigger one or more specific YARA-L 2.0 detection rules.
 
 You will be given:
-1. The target YARA-L detection rule (logic, metadata, MITRE techniques).
+1. The target YARA-L detection rule(s) (logic, metadata, MITRE techniques).
 2. The deconstructed UDM constraints (required event types, positive regex/string criteria, negative exclusions to avoid, thresholds, and time windows).
 3. The target log source type(s) and their detailed Schema Guides.
 4. The generation objective: 'fire' (trigger detection), 'evade' (negative test), or 'full-chain' (end-to-end simulation).
 
 CRITICAL RULES:
 1. **Rule Satisfaction**:
-   - For 'fire': Ensure the generated logs contain the exact strings, regexes, parameters, and UDM fields specified in the positive constraints.
-   - Strictly avoid matching any negative exclusion patterns (clauses with '!=') so the rule does not discard the event.
-   - If the rule requires a threshold (e.g. count > 5), generate at least that many distinct events within the specified match window.
-   - If the rule is a multi-event join, bind matching entity fields (e.g. same user, IP, or hostname) across the joined events in proper sequence.
+   - For 'fire' or 'full-chain': Ensure the generated logs contain the exact strings, regexes, parameters, and UDM fields specified in the positive constraints for EVERY target rule.
+   - Strictly avoid matching any negative exclusion patterns (clauses with '!=' or 'not (...)') so the rules do not discard the events.
+   - If a rule requires a threshold (e.g. count > 5), generate at least that many distinct events within the specified match window.
+   - If a rule is a multi-event join or part of a multi-rule attack chain, bind matching entity fields (e.g. same user, IP, hostname, and parent/child process hierarchy) across the events in proper chronological sequence.
 2. **Schema Fidelity**:
    - Format each log line strictly according to the Schema Guide for the target log source (e.g. Windows Sysmon XML/Key-Value, CEF, JSON, Syslog).
-   - Ensure the fields that Google SecOps parsers use to populate the target UDM attributes (e.g. CommandLine, ParentImage, TargetUserName, IpAddress) are realistically placed in the raw log.
+   - Ensure the fields that Google SecOps parsers use to populate the target UDM attributes (e.g. CommandLine, ParentImage, TargetUserName, IpAddress, ClientRequestURI) are realistically placed in the raw log.
 3. **Relative Time Templating**:
    - Use relative template tags:
      * ISO 8601: `##$TimeStamp-0d0h5m0s$##`
@@ -364,68 +364,87 @@ Return ONLY the JSON array."""
         enrich_gti=enrich_gti,
     )
 
+  def _resolve_rule(self, rule: Union[SecOpsRule, str]) -> SecOpsRule:
+    if isinstance(rule, SecOpsRule):
+      return rule
+    rule_obj = self.rule_service.get_rule(rule)
+    if not rule_obj:
+      # Check if rule string is raw YARA-L rule code
+      if "rule " in rule and ("meta:" in rule or "events:" in rule or "condition:" in rule):
+        from .rules import extract_mitre_ids
+        techs, tacs = extract_mitre_ids({}, rule)
+        rule_name_match = re.search(r"rule\s+([A-Za-z0-9_]+)", rule)
+        rule_obj = SecOpsRule(
+            rule_id=rule_name_match.group(1) if rule_name_match else "custom_rule",
+            display_name=rule_name_match.group(1) if rule_name_match else "Custom Rule",
+            text=rule,
+            techniques=techs,
+            tactics=tacs,
+        )
+      else:
+        raise ValueError(
+            f"Could not find SecOps rule '{rule}' in local cache, files, or tenant API."
+        )
+    return rule_obj
+
   def generate_from_rule(
       self,
-      rule: Union[SecOpsRule, str],
+      rule: Union[SecOpsRule, str, List[Union[SecOpsRule, str]]],
       log_types: Optional[List[str]] = None,
       outcome: str = "fire",
       base_time: Optional[datetime] = None,
       custom_system_prompt: Optional[str] = None,
       count: Optional[int] = None,
+      scenario_context: Optional[str] = None,
   ) -> GeneratedScenario:
-    """Generate synthetic logs engineered to trigger or test a specific YARA-L rule."""
-    if isinstance(rule, str):
-      rule_obj = self.rule_service.get_rule(rule)
-      if not rule_obj:
-        # Check if rule string is raw YARA-L rule code
-        if "rule " in rule and ("meta:" in rule or "events:" in rule or "condition:" in rule):
-          from .rules import extract_mitre_ids
-          techs, tacs = extract_mitre_ids({}, rule)
-          rule_name_match = re.search(r"rule\s+([A-Za-z0-9_]+)", rule)
-          rule_obj = SecOpsRule(
-              rule_id=rule_name_match.group(1) if rule_name_match else "custom_rule",
-              display_name=rule_name_match.group(1) if rule_name_match else "Custom Rule",
-              text=rule,
-              techniques=techs,
-              tactics=tacs,
-          )
-        else:
-          raise ValueError(
-              f"Could not find SecOps rule '{rule}' in local cache, files, or tenant API."
-          )
+    """Generate synthetic logs engineered to trigger or test one or more YARA-L rules."""
+    if isinstance(rule, list):
+      rule_objs = [self._resolve_rule(r) for r in rule]
+    elif isinstance(rule, str) and "," in rule and "rule " not in rule:
+      rule_objs = [self._resolve_rule(r.strip()) for r in rule.split(",") if r.strip()]
     else:
-      rule_obj = rule
+      rule_objs = [self._resolve_rule(rule)]
 
-    analysis = self.rule_analyzer.analyze(rule_obj)
+    analyses = [self.rule_analyzer.analyze(r) for r in rule_objs]
 
     # Inferred log types if not provided
     if not log_types:
-      log_types = analysis.suggested_log_types[:2] if analysis.suggested_log_types else ["WINDOWS_SYSMON"]
+      inferred: List[str] = []
+      for a in analyses:
+        for lt in a.suggested_log_types[:2]:
+          if lt not in inferred:
+            inferred.append(lt)
+      log_types = inferred if inferred else ["WINDOWS_SYSMON"]
 
     # Target event count
-    target_count = count or max(analysis.threshold_count, 1)
+    total_threshold = sum(max(a.threshold_count, 1) for a in analyses)
+    target_count = count or total_threshold
 
-    rule_scenario_prompt = f"""### TARGET YARA-L DETECTION RULE:
-Name: {rule_obj.display_name}
-Rule ID: {rule_obj.rule_id}
-MITRE Techniques: {', '.join(analysis.techniques) if analysis.techniques else 'N/A'}
-MITRE Tactics: {', '.join(analysis.tactics) if analysis.tactics else 'N/A'}
+    rules_blocks: List[str] = []
+    for idx, (r_obj, a_obj) in enumerate(zip(rule_objs, analyses), start=1):
+      rules_blocks.append(
+          f"#### RULE {idx} OF {len(rule_objs)}: {r_obj.display_name} ({r_obj.rule_id})\n"
+          f"MITRE Techniques: {', '.join(a_obj.techniques) if a_obj.techniques else 'N/A'}\n"
+          f"MITRE Tactics: {', '.join(a_obj.tactics) if a_obj.tactics else 'N/A'}\n\n"
+          f"**YARA-L 2.0 Rule Text**:\n```yara\n{r_obj.text}\n```\n\n"
+          f"**Trigger Analysis & UDM Requirements**:\n{a_obj.summary}"
+      )
 
-### YARA-L 2.0 RULE TEXT:
-```yara
-{rule_obj.text}
-```
+    context_section = ""
+    if scenario_context:
+      context_section = f"\n### ADDITIONAL SCENARIO NARRATIVE & STORY CONTEXT:\n{scenario_context}\n"
 
-### TRIGGER ANALYSIS & UDM REQUIREMENTS:
-{analysis.summary}
-
+    rules_joined = "\n\n---\n\n".join(rules_blocks)
+    rule_scenario_prompt = f"""### TARGET YARA-L DETECTION RULE(S) ({len(rule_objs)} TOTAL):
+{rules_joined}
+{context_section}
 ### SCENARIO GENERATION OBJECTIVE:
 Objective: '{outcome.upper()}'
-- If 'fire': You MUST generate logs that trigger this detection. Every positive constraint in the rule must be matched. Exclusions MUST be strictly avoided. Ensure at least {target_count} matching event(s) are generated.
+- If 'fire': You MUST generate a cohesive, realistic sequence of logs that triggers EVERY ONE of the {len(rule_objs)} target detection rule(s) listed above. Every positive constraint in each rule must be matched, and exclusions MUST be strictly avoided. Ensure all shared entities (hostnames, IPs, users, parent/child process trees) are consistent across the attack chain.
 - If 'evade' or 'negative': Deliberately generate activity that resembles the threat but hits at least one exclusion clause (to verify false positive defense).
-- If 'full-chain': Generate pre-incident recon, followed by the {target_count} trigger events, followed by post-incident activity.
+- If 'full-chain': Generate pre-incident recon/initial access, followed by all {len(rule_objs)} rule trigger phases (at least {target_count} trigger events across the chain), followed by post-incident activity and cross-source telemetry correlation.
 
-Generate raw logs in the specified log format(s) ({', '.join(log_types)}) that Google SecOps parsers will convert into UDM events satisfying the rule.
+Generate raw logs in the specified log format(s) ({', '.join(log_types)}) that Google SecOps parsers will convert into UDM events satisfying all target rules.
 """
     system_instruction = custom_system_prompt or RULE_SYSTEM_PROMPT
     return self.generate(
@@ -434,4 +453,3 @@ Generate raw logs in the specified log format(s) ({', '.join(log_types)}) that G
         base_time=base_time,
         custom_system_prompt=system_instruction,
     )
-

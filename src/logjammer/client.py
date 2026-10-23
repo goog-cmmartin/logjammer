@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Union
 
-from .config import LogJammerConfig
+from .config import DEFAULT_VERTEX_LOCATION, LogJammerConfig, has_vertex_adc
 from .generator import ScenarioGenerator
 from .models import GeneratedScenario, LearnResult, RuleAnalysis, SecOpsRule
 from .playbook import PlaybookService
@@ -21,7 +21,7 @@ class LogJammer:
   """Main entry point for Log Jammer Python library.
 
   Usage:
-      client = LogJammer(api_key="...")
+      client = LogJammer(api_key="...")  # or relies on Vertex AI ADC automatically
       client.learn("MY_APP", "./sample_app.log")
       scenario = client.generate(
           scenario="Ransomware lateral movement via SMB",
@@ -42,6 +42,8 @@ class LogJammer:
       region: Optional[str] = None,
       temperature: float = 1.0,
       thinking_budget: int = -1,
+      vertexai: Optional[bool] = None,
+      vertex_location: Optional[str] = None,
   ):
     guides_path = Path(guides_dir) if guides_dir else None
     rules_path = Path(rules_dir) if rules_dir else None
@@ -54,6 +56,8 @@ class LogJammer:
         region=region or "us",
         temperature=temperature,
         thinking_budget=thinking_budget,
+        vertexai=vertexai,
+        vertex_location=vertex_location or DEFAULT_VERTEX_LOCATION,
     )
     if guides_path:
       self.config.guides_dir = guides_path
@@ -111,11 +115,14 @@ class LogJammer:
   ) -> None:
     """Pre-flight check required environment variables and credentials before execution."""
     if require_genai:
-      if not self.config.api_key:
+      has_api_key = bool(self.config.api_key and not self.config.vertexai)
+      if not has_api_key and not has_vertex_adc(self.config):
         raise ValueError(
-            "[Pre-flight Validation Failed] Missing required environment variable GEMINI_API_KEY.\n"
+            "[Pre-flight Validation Failed] Missing required environment variable GEMINI_API_KEY or Vertex AI ADC credentials.\n"
             "Please export a valid API key:\n"
             "    export GEMINI_API_KEY=\"your_api_key_here\"\n"
+            "Or authenticate with Google Cloud ADC for Vertex AI:\n"
+            "    gcloud auth application-default login\n"
             "Get an API key at: https://aistudio.google.com/app/apikey"
         )
 
@@ -169,15 +176,16 @@ class LogJammer:
 
   def generate_from_rule(
       self,
-      rule: Union[SecOpsRule, str],
+      rule: Union[SecOpsRule, str, List[Union[SecOpsRule, str]]],
       log_types: Optional[List[str]] = None,
       outcome: str = "fire",
       base_time: Optional[datetime] = None,
       custom_system_prompt: Optional[str] = None,
       count: Optional[int] = None,
+      scenario_context: Optional[str] = None,
       save_to_cache: bool = True,
   ) -> GeneratedScenario:
-    """Generate synthetic logs engineered to trigger or test a specific YARA-L rule."""
+    """Generate synthetic logs engineered to trigger or test one or more YARA-L rules."""
     sc_obj = self.generator.generate_from_rule(
         rule=rule,
         log_types=log_types,
@@ -185,6 +193,7 @@ class LogJammer:
         base_time=base_time,
         custom_system_prompt=custom_system_prompt,
         count=count,
+        scenario_context=scenario_context,
     )
     if save_to_cache:
       self.scenario_service.save_scenario(sc_obj)
@@ -209,6 +218,13 @@ class LogJammer:
       technique: Optional[str] = None,
       tactic: Optional[str] = None,
       live_only: bool = False,
+      rule_type: str = "all",
+      precision: Optional[str] = None,
+      created_after: Optional[str] = None,
+      created_before: Optional[str] = None,
+      updated_after: Optional[str] = None,
+      updated_before: Optional[str] = None,
+      sort_by: Optional[str] = None,
   ) -> List[SecOpsRule]:
     """Search and filter cached rules."""
     return self.rule_service.search_rules(
@@ -216,6 +232,13 @@ class LogJammer:
         technique=technique,
         tactic=tactic,
         live_only=live_only,
+        rule_type=rule_type,
+        precision=precision,
+        created_after=created_after,
+        created_before=created_before,
+        updated_after=updated_after,
+        updated_before=updated_before,
+        sort_by=sort_by,
     )
 
   def get_rule(self, identifier: str) -> Optional[SecOpsRule]:
