@@ -210,7 +210,7 @@ When generating test data, replace all static time values with relative timestam
       "assigned_groups": "Cloud-Infra-Admins",
       "authentication_methods": "Federation-SAML",
       "target_machine": "prod-k8s-node01.infra.example.com",
-      "source_user": "alice.wong@example.com",
+      "source_user": "",
       "source_hostname": "MAC-LPT-ALICE",
       "assigned_domain_groups": "Domain Admins",
       "connection_string": "secureaccess /i alice.wong@example.com /s eu-fintech-access /d infra.example.com /a prod-k8s-node01.infra.example.com /u dpa-alice-9912",

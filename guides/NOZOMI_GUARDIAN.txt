@@ -100,7 +100,7 @@ Nozomi Guardian CEF logs contain up to two distinct timestamps:
 ### Dynamic Generation Placeholders
 When generating dynamic logs, use the following template tags to ensure strict time synchronization across headers and payload extensions:
 
-- `##$SyslogTime-0d0h30m0s$##` -> Generates RFC 3164 Syslog timestamp (e.g., `Oct 28 2024 16:01:45`).
+- `##$TimeStamp-0d0h30m0s|%b %d %Y %H:%M:%S$##` -> Generates the syslog header timestamp with the year (e.g., `Oct 28 2024 16:01:45`). The year is required, or events without a `start=` field are stamped with ingestion time.
 - `##$EpochMillis-0d0h30m0s$##` -> Generates Epoch Milliseconds for the `start=` field (e.g., `1730131243083`).
 - `##$Epoch-0d1h0m0s$##` -> Generates standard 10-digit Epoch seconds (e.g., `1730131243`).
 - `##$TimeStamp-0d2h15m0s$##` -> Generates ISO 8601 timestamps if needed for embedded API traces.
@@ -112,7 +112,7 @@ When generating dynamic logs, use the following template tags to ensure strict t
 ### Scenario 1: OT/ICS Reconnaissance (Signature Port Scan Alert with MITRE Mapping)
 *A passive network scan detected across OT assets with associated MITRE ICS tactic/technique metadata.*
 ```text
-<137>##$SyslogTime-0d0h10m15s$## guardian07 n2osevents[0]: CEF:0|Nozomi Networks|N2OS|25.6.0-10271323_CD5F7|SIGN:NETWORK-SCAN|Network Scan|7|dvc=10.20.0.9 dvchost=guardian07 cs1=7.0 cs2=true cs3=8c7b2055-6932-4ece-e5db-3f940aebc534 cs5=[] cs6=3 cs1Label=Risk cs2Label=IsSecurity cs3Label=Id cs5Label=Parents cs6Label=n2os_schema flexString1=T0846 flexString2=Discovery flexString3=Network Scan flexString1Label=Mitre attack techniques flexString2Label=Mitre attack tactics flexString3Label=Name msg=A TCP Port Scan was detected (host 192.168.10.45 sent 101 connection attempts with 2 successful connections in less than 10 seconds) src=192.168.10.45 smac=00:50:56:a1:b2:c3 spt=59317 proto=TCP start=##$EpochMillis-0d0h10m15s$##
+<137>##$TimeStamp-0d0h10m15s|%b %d %Y %H:%M:%S$## guardian07 n2osevents[0]: CEF:0|Nozomi Networks|N2OS|25.6.0-10271323_CD5F7|SIGN:NETWORK-SCAN|Network Scan|7|dvc=10.20.0.9 dvchost=guardian07 cs1=7.0 cs2=true cs3=8c7b2055-6932-4ece-e5db-3f940aebc534 cs5=[] cs6=3 cs1Label=Risk cs2Label=IsSecurity cs3Label=Id cs5Label=Parents cs6Label=n2os_schema flexString1=T0846 flexString2=Discovery flexString3=Network Scan flexString1Label=Mitre attack techniques flexString2Label=Mitre attack tactics flexString3Label=Name msg=A TCP Port Scan was detected (host 192.168.10.45 sent 101 connection attempts with 2 successful connections in less than 10 seconds) src=192.168.10.45 smac=00:50:56:a1:b2:c3 spt=59317 proto=TCP start=##$EpochMillis-0d0h10m15s$##
 ```
 
 ### Scenario 2: Industrial Network Flow Telemetry (EtherNet/IP CIP Communication)
@@ -124,19 +124,19 @@ CEF:0|Nozomi Networks|N2OS|24.1.0|flow|Network Flow|Low|src=192.168.1.11 dst=192
 ### Scenario 3: Administrative Session Creation / User Sign-in
 *Auditing web UI console authentication from an engineering workstation.*
 ```text
-<134>##$SyslogTime-0d2h30m00s$## guardian01 n2osevents[0]: CEF:0|Nozomi Networks|N2OS|24.4.1-10071452_979BF|AUDIT:SESSIONS:CREATE|User signed in|0|dvchost=guardian01 cs1=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36 cs6=3 cs1Label=browser cs6Label=n2os_schema msg=User signed in src=10.100.20.15, 10.100.20.1 suser=elena.v start=##$EpochMillis-0d2h30m00s$##
+<134>##$TimeStamp-0d2h30m00s|%b %d %Y %H:%M:%S$## guardian01 n2osevents[0]: CEF:0|Nozomi Networks|N2OS|24.4.1-10071452_979BF|AUDIT:SESSIONS:CREATE|User signed in|0|dvchost=guardian01 cs1=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36 cs6=3 cs1Label=browser cs6Label=n2os_schema msg=User signed in src=10.100.20.15, 10.100.20.1 suser=elena.v start=##$EpochMillis-0d2h30m00s$##
 ```
 
 ### Scenario 4: Security Anomaly (Session Hijacking Attempt Detected)
 *The Guardian appliance identifies an in-flight administrative web session originating from an unexpected IP address.*
 ```text
-<134>##$SyslogTime-0d0h45m10s$## guardian01 n2osevents[0]: CEF:0|Nozomi Networks|N2OS|24.4.1-10071452_979BF|AUDIT::|Session hijacking detected, closing session|0|dvchost=guardian01 cs6=3 cs1Label=browser cs6Label=n2os_schema msg=Session hijacking detected, closing session, Session ID: 9a01f83efb1404b2c60caa4a92f25a0b. Remote ip is '198.51.100.50, 203.0.113.1' while session has '192.168.5.20, 203.0.113.1'. Request user agent is 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36' while session has 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36' src=198.51.100.50, 203.0.113.1 suser=amal.a start=##$EpochMillis-0d0h45m10s$##
+<134>##$TimeStamp-0d0h45m10s|%b %d %Y %H:%M:%S$## guardian01 n2osevents[0]: CEF:0|Nozomi Networks|N2OS|24.4.1-10071452_979BF|AUDIT::|Session hijacking detected, closing session|0|dvchost=guardian01 cs6=3 cs1Label=browser cs6Label=n2os_schema msg=Session hijacking detected, closing session, Session ID: 9a01f83efb1404b2c60caa4a92f25a0b. Remote ip is '198.51.100.50, 203.0.113.1' while session has '192.168.5.20, 203.0.113.1'. Request user agent is 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36' while session has 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36' src=198.51.100.50, 203.0.113.1 suser=amal.a start=##$EpochMillis-0d0h45m10s$##
 ```
 
 ### Scenario 5: System Health Warning (High Network Load / Dropped Link Events)
 *Appliance health log alerting that sensor capture buffers are overflowing due to high packet rates.*
 ```text
-<131>##$SyslogTime-0d3h12m00s$## guardian01 n2osevents[0]: CEF:0|Nozomi Networks|N2OS|23.0.0-04221138_CABC9|HEALTH|Health problem|0|dvchost=guardian03 cs6=3 cs6Label=n2os_schema msg=Start discarding link events because of high network load
+<131>##$TimeStamp-0d3h12m00s|%b %d %Y %H:%M:%S$## guardian01 n2osevents[0]: CEF:0|Nozomi Networks|N2OS|23.0.0-04221138_CABC9|HEALTH|Health problem|0|dvchost=guardian03 cs6=3 cs6Label=n2os_schema msg=Start discarding link events because of high network load
 ```
 
 ---

@@ -119,7 +119,7 @@ When generating synthetic log streams, insert relative time template tags to mai
 
 ### Example 1: Standard ELFF Text Log (Normal Authenticated User Activity - Allowed & Accelerated)
 ```text
-2023-10-15 14:10:22 145 10.1.4.55 jsmith CORP\Domain%20Users - OBSERVED "Office/Business Applications;File Storage/Sharing" https://login.microsoftonline.com/ 200 TCP_ACCELERATED GET application/json https portal.office.com 443 /api/files/metadata ?user=jsmith&tenant=corp - "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36" 10.88.220.1 4820 1250 - "Office 365 General" "Access Files" 858b47d86335fdf4-0000000000d6ffd7-0000000060f04ad5 1 "portal.office.com" "Office/Business Applications" "1" 10.88.220.1 52.96.166.130
+##$TimeStamp-0d0h10m0s|%Y-%m-%d %H:%M:%S$## 145 10.1.4.55 jsmith CORP\Domain%20Users - OBSERVED "Office/Business Applications;File Storage/Sharing" https://login.microsoftonline.com/ 200 TCP_ACCELERATED GET application/json https portal.office.com 443 /api/files/metadata ?user=jsmith&tenant=corp - "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36" 10.88.220.1 4820 1250 - "Office 365 General" "Access Files" 858b47d86335fdf4-0000000000d6ffd7-0000000060f04ad5 1 "portal.office.com" "Office/Business Applications" "1" 10.88.220.1 52.96.166.130
 ```
 
 ### Example 2: Syslog RFC 5424 / JSON Log Payload (Malicious Category / Policy Denied Block)
