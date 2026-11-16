@@ -118,7 +118,7 @@ Windows DNS log generators must format timestamps according to the specific tran
 
 | Transport Layer | Timestamp Format | Dynamic Macro Tag |
 | :--- | :--- | :--- |
-| **ETW / JSON Unix Milliseconds** | Epoch in milliseconds (e.g., `1640073312000`) | `##$Epoch-0d0h0m0s$##000` or `##$EpochMs-0d0h0m0s$##` |
+| **ETW / JSON Unix Milliseconds** | Epoch in milliseconds (e.g., `1640073312000`) | `##$Epoch-0d0h0m0s$##000` or `##$EpochMS-0d0h0m0s$##` |
 | **NXLog / Syslog RFC 5424** | ISO 8601 with fractional sec & offset (`YYYY-MM-DDThh:mm:ss.ffffff±hh:mm`) | `##$TimeStamp-0d0h0m0s$##` |
 | **Syslog RFC 3164 Header** | `MMM DD HH:MM:SS` (e.g., `Dec 21 01:47:00`) | `##$SyslogTime-0d0h0m0s$##` |
 | **Native Debug File (`dns.log`)** | `M/D/YYYY H:M:S AM/PM` (e.g., `12/21/2021 8:57:50 AM`) | Custom formatted relative timestamp |

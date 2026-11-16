@@ -115,7 +115,7 @@ When generating dynamic logs, compute the timestamps using the following standar
 * For `timestamp` (Epoch Milliseconds):
   `"timestamp":"##$Epoch-0d0h0m0s$##000"` (or dynamically appended milliseconds).
 * For `ContextTimeStamp` / `ProcessStartTime`:
-  `"ContextTimeStamp":"##$Epoch-0d0h0m0s$##.##$Digit100-999$##"`
+  `"ContextTimeStamp":"##$Epoch-0d0h0m0s$##.512"`
 * For offsets (e.g., process start vs end or logon vs logoff):
   * Start: `"ProcessStartTime":"##$Epoch-0d0h10m0s$##.124"`
   * Ingestion: `"timestamp":"##$Epoch-0d0h10m0s$##540"`

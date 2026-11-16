@@ -150,7 +150,7 @@ When generating test data, replace all static time values with relative timestam
 * **ISO-8601 Format**: `##$TimeStamp-0d2h15m0s$##` (produces `2026-04-23T13:27:25Z`)
 * **Syslog BSD Format**: `##$SyslogTime-0d0h30m0s$##` (produces `May 06 04:21:42`)
 * **Epoch Seconds**: `##$Epoch-0d1h0m0s$##` (produces `1774519755`)
-* **Epoch Milliseconds**: `##$Epoch-0d1h0m0s$##000` or `##$EpochMs-0d0h5m0s$##`
+* **Epoch Milliseconds**: `##$Epoch-0d1h0m0s$##000` or `##$EpochMS-0d0h5m0s$##`
 
 ---
 

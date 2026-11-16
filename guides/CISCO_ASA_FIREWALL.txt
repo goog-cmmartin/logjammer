@@ -114,9 +114,9 @@ When authoring scenarios for synthetic generation, use the following relative te
 | Tag Template | Expected Replacement Output (Example) |
 |---|---|
 | `##$SyslogTime-0d2h15m0s$##` | `Nov 26 2024 04:15:30` |
-| `##$SyslogTimeNoYear-0d0h30m0s$##` | `Nov 26 06:00:30` |
+| `##$SyslogTime-0d0h30m0s$##` | `Nov 26 06:00:30` |
 | `##$TimeStamp-0d1h0m0s$##` | `2024-11-26T05:30:30Z` |
-| `##$TimeStampIsoOffset-0d0h0m0s$##`| `2024-11-26T06:30:30+00:00` |
+| `##$TimeStamp-0d0h0m0s|%Y-%m-%dT%H:%M:%S%:z$##`| `2024-11-26T06:30:30+00:00` |
 | `##$Epoch-0d0h5m0s$##` | `1732602630` |
 
 ---
