@@ -261,3 +261,36 @@ Run test suite:
 ```bash
 PYTHONPATH=src python3 -m unittest discover -s tests
 ```
+
+### Checking schema guides
+
+A guide that teaches the generator a time tag the engine cannot fill, or a field layout the parser rejects, produces logs that look fine but carry placeholders or wrong event times. Two checks catch this.
+
+`scripts/check_guides.py` needs no network access. It lists time template tags that LogJammer cannot fill. The same check runs in the unit tests for the bundled guides, and `logjammer learn` exits with code 2 when a new guide contains such a tag.
+```bash
+python scripts/check_guides.py                      # ./guides and ~/.logjammer/guides
+python scripts/check_guides.py path/to/guides
+```
+
+`scripts/check_guide_examples.py` needs a Google SecOps instance. It runs every guide's example log lines through the SecOps `runParser` API, which ingests nothing, and reports examples that fail to parse or whose event time was not read from the log.
+```bash
+export CHRONICLE_CUSTOMER_ID=<customer-id> GOOGLE_CLOUD_PROJECT=<project>
+python scripts/check_guide_examples.py
+python scripts/check_guide_examples.py --types PAN_FIREWALL OKTA --json-out report.json
+```
+Log types with no parser on the instance are skipped unless `--parser-config-dir` points to a folder of `<LOG_TYPE>.conf` files. Some parsers do not read the event time for some formats, so time problems only fail the run with `--strict-time`.
+
+### Time template tags
+
+| Tag | Output |
+| :--- | :--- |
+| `##$TimeStamp-0d2h15m0s$##` | ISO 8601 UTC with milliseconds |
+| `##$Epoch-0d1h0m0s$##` | Unix seconds |
+| `##$EpochMS-0d1h0m0s$##` | Unix milliseconds |
+| `##$EpochMicroseconds-0d1h0m0s$##`, `##$EpochNanoseconds-0d1h0m0s$##` | Unix microseconds, nanoseconds |
+| `##$Date-0d0h0m0s$##` | `YYYY-MM-DD` |
+| `##$SyslogTime-0d0h45m0s$##` | `Aug 24 11:15:00`, with no year |
+| `##$TimeStamp-0d0h45m0s\|%Y/%m/%d %H:%M:%S$##` | Any `strftime` layout. `%3f` is milliseconds and `%:z` is an offset with a colon. `yyyy/MM/dd HH:mm:ss` style tokens also work. |
+| `##$TimeStamp-0d0h45m0s\|%Y-%m-%dT%H:%M:%S%:z\|-08:00$##` | The same, rendered in a fixed UTC offset |
+
+The offset after the tag name is optional. The format separator is a pipe.
