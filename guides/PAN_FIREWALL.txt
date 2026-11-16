@@ -122,17 +122,18 @@ All PAN-OS CSV log records share the identical first 7 positional fields:
 * `41`: **Action Flags** (`0x0`, `0x8000000000000000`, `0x2000000000000000`)
 * `42`: **Source Country/Region** (`United States`, `China`, `FI`, `10.0.0.0-10.255.255.255`)
 * `43`: **Destination Country/Region** (`United States`, `Germany`, `198.51.100.0-198.51.100.255`)
-* `44`: **Packets Sent** (Integer)
-* `45`: **Packets Received** (Integer)
-* `46`: **Session End Reason** (`aged-out`, `tcp-fin`, `tcp-rst-from-client`, `tcp-rst-from-server`, `policy-deny`, `decrypt-unsupport-param`, `n/a`)
-* `47`: **Device Group Hierarchy Level 1** (`0` or ID)
-* `48-50`: **Device Group Hierarchy Levels 2-4**
-* `51`: **Virtual System Name** (e.g. `vsys1` or blank)
-* `52`: **Device Name** (`PA-VM-01`, `Hub-DC-IGW-Palo1`)
-* `53`: **Action Source** (`from-policy`)
-* `54-60`: **UUIDs, Tunnel IDs, Parent Session Details**
-* `61`: **Rule UUID** (`2cb9a33a-24d7-44af-a1b7-2a90bc7359d6`)
-* `70+`: **High-Res Timestamp** (`2024-05-15T16:12:42.990+03:00`), App Categories (`internet-utility`, `networking`, `browser-based`), Risk Level (`1` to `5`), App Characteristics (`used-by-malware,has-known-vulnerability`), Is Tunneled (`no`/`yes`).
+* `44`: **Future Use** (blank). This empty field must be present, or every later field shifts by one and the parser fails.
+* `45`: **Packets Sent** (Integer)
+* `46`: **Packets Received** (Integer)
+* `47`: **Session End Reason** (`aged-out`, `tcp-fin`, `tcp-rst-from-client`, `tcp-rst-from-server`, `policy-deny`, `decrypt-unsupport-param`, `n/a`)
+* `48`: **Device Group Hierarchy Level 1** (`0` or ID)
+* `49-51`: **Device Group Hierarchy Levels 2-4**
+* `52`: **Virtual System Name** (e.g. `vsys1` or blank)
+* `53`: **Device Name** (`PA-VM-01`, `Hub-DC-IGW-Palo1`)
+* `54`: **Action Source** (`from-policy`)
+* `55-65`: **Source/Destination VM UUIDs, Tunnel IDs, Parent Session Details, SCTP counters**
+* `66`: **Rule UUID** (`2cb9a33a-24d7-44af-a1b7-2a90bc7359d6`)
+* `103`: **High-Res Timestamp** (`2024-05-15T16:12:42.990+03:00`), App Categories (`internet-utility`, `networking`, `browser-based`), Risk Level (`1` to `5`), App Characteristics (`used-by-malware,has-known-vulnerability`), Is Tunneled (`no`/`yes`).
 
 ---
 
@@ -223,7 +224,7 @@ PAN-OS uses multiple synchronized timestamp formats across the syslog header, me
 ### Example 1: TRAFFIC Log - Normal Outbound Web/TLS Session End (Standard Syslog CSV)
 * **Scenario**: Standard employee accessing external web application, session completed normally with FIN handshake.
 ```text
-<14>##$SyslogTime-0d0h2m10s$## FW-CORP-EDGE01 1,##$TimeStamp-0d0h2m10s|YYYY/MM/DD HH:mm:ss$##,013101009958,TRAFFIC,end,2561,##$TimeStamp-0d0h2m10s|YYYY/MM/DD HH:mm:ss$##,10.200.4.152,104.18.25.10,198.51.100.45,104.18.25.10,Corporate-Internet-Access,ACME\jsmith,,ssl,vsys1,Trust-LAN,Untrust-WAN,ae1.200,ae1.100,LogToPanorama,##$TimeStamp-0d0h2m10s|YYYY/MM/DD HH:mm:ss$##,4820194,1,54892,443,18420,443,0x400019,tcp,allow,8492,3120,5372,26,##$TimeStamp-0d0h2m45s|YYYY/MM/DD HH:mm:ss$##,35,web-browsing,,7448799336706319459,0x8000000000000000,10.0.0.0-10.255.255.255,United States,14,12,tcp-fin,12,4,0,0,,FW-CORP-EDGE01,from-policy,,,0,,0,,N/A,0,0,0,0,ad72847a-c59a-4124-af78-a06c037b2457,0,0,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,##$TimeStamp-0d0h2m10s|YYYY-MM-DDTHH:mm:ss.SSS+00:00$##,,,encrypted-tunnel,networking,browser-based,4,"used-by-malware,able-to-transfer-file,has-known-vulnerability,tunnel-other-application,pervasive-use",,ssl,no,no,0
+<14>##$SyslogTime-0d0h2m10s$## FW-CORP-EDGE01 1,##$TimeStamp-0d0h2m10s|YYYY/MM/DD HH:mm:ss$##,013101009958,TRAFFIC,end,2561,##$TimeStamp-0d0h2m10s|YYYY/MM/DD HH:mm:ss$##,10.200.4.152,104.18.25.10,198.51.100.45,104.18.25.10,Corporate-Internet-Access,ACME\jsmith,,ssl,vsys1,Trust-LAN,Untrust-WAN,ae1.200,ae1.100,LogToPanorama,##$TimeStamp-0d0h2m10s|YYYY/MM/DD HH:mm:ss$##,4820194,1,54892,443,18420,443,0x400019,tcp,allow,8492,3120,5372,26,##$TimeStamp-0d0h2m45s|YYYY/MM/DD HH:mm:ss$##,35,web-browsing,,7448799336706319459,0x8000000000000000,10.0.0.0-10.255.255.255,United States,,14,12,tcp-fin,12,4,0,0,,FW-CORP-EDGE01,from-policy,,,0,,0,,N/A,0,0,0,0,ad72847a-c59a-4124-af78-a06c037b2457,0,0,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,##$TimeStamp-0d0h2m10s|YYYY-MM-DDTHH:mm:ss.SSS+00:00$##,,,encrypted-tunnel,networking,browser-based,4,"used-by-malware,able-to-transfer-file,has-known-vulnerability,tunnel-other-application,pervasive-use",,ssl,no,no,0
 ```
 
 ### Example 2: THREAT Log - Vulnerability Exploit Blocked (RFC 5424 Syslog CSV)
