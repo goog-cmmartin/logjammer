@@ -152,6 +152,8 @@ class LearnResult:
   guide_path: Optional[Path] = None
   sample_count: int = 0
   files_analyzed: int = 1
+  # Time template tags in the generated guide that LogJammer cannot fill. Empty when the guide is clean.
+  unsupported_time_tags: List[str] = field(default_factory=list)
 
 
 @dataclass

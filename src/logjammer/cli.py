@@ -435,6 +435,16 @@ def main(args: Optional[List[str]] = None) -> int:
       print(f"  - Files Analyzed: {result.files_analyzed}")
       print(f"  - Total Lines Analyzed: {result.sample_count}")
       print(f"  - Saved to: {result.guide_path}")
+      if result.unsupported_time_tags:
+        print(
+            f"\n[Warning] The guide uses {len(result.unsupported_time_tags)} time template tag(s) that LogJammer "
+            "cannot fill. Logs generated from it would keep these placeholders:",
+            file=sys.stderr,
+        )
+        for tag in result.unsupported_time_tags[:10]:
+          print(f"    {tag}", file=sys.stderr)
+        print("  Edit the guide to use supported tags, or run learn again.", file=sys.stderr)
+        return 2
       return 0
     except Exception as e:
       print(f"\n[Error] Failed to learn log schema:\n{e}", file=sys.stderr)

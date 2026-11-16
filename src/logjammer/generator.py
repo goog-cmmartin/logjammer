@@ -15,7 +15,7 @@ from .models import GeneratedScenario, LogEntry, LogFormat, RuleAnalysis, SecOps
 from .playbook import PlaybookService
 from .rule_analyzer import RuleAnalyzer
 from .rules import RuleService
-from .templates import replace_time_templates
+from .templates import SUPPORTED_TIME_TAGS_PROMPT, replace_time_templates
 
 
 SCENARIO_SYSTEM_PROMPT = """You are an elite Red Team Operator and Security Telemetry Architect.
@@ -33,10 +33,8 @@ CRITICAL RULES:
    - The timeline must progress logically (initial recon -> delivery -> execution -> persistence -> lateral movement -> exfiltration/impact).
 3. **Relative Time Templating**:
    - Never hardcode static timestamps!
-   - Use relative template tags:
-     * ISO 8601: `##$TimeStamp-0d2h15m0s$##` (e.g. 2 hours 15 minutes before trigger)
-     * Unix Epoch: `##$Epoch-0d1h30m0s$##`
-     * Syslog: `##$SyslogTime-0d0h45m0s$##`
+   - Use relative template tags, where the offset is the time before the trigger event.
+   - {SUPPORTED_TIME_TAGS}
 4. **Output Format**:
    Return a single valid JSON object with the following structure:
    ```json
@@ -56,7 +54,7 @@ CRITICAL RULES:
    }
    ```
    Do not include any conversational preamble outside the JSON markdown block.
-"""
+""".replace("{SUPPORTED_TIME_TAGS}", SUPPORTED_TIME_TAGS_PROMPT)
 
 RULE_SYSTEM_PROMPT = """You are an elite Detection Engineer and Security Telemetry Specialist.
 Your task is to reverse-engineer and generate synthetic raw logs that will be parsed by Google SecOps (Chronicle SIEM) and trigger one or more specific YARA-L 2.0 detection rules.
@@ -77,10 +75,8 @@ CRITICAL RULES:
    - Format each log line strictly according to the Schema Guide for the target log source (e.g. Windows Sysmon XML/Key-Value, CEF, JSON, Syslog).
    - Ensure the fields that Google SecOps parsers use to populate the target UDM attributes (e.g. CommandLine, ParentImage, TargetUserName, IpAddress, ClientRequestURI) are realistically placed in the raw log.
 3. **Relative Time Templating**:
-   - Use relative template tags:
-     * ISO 8601: `##$TimeStamp-0d0h5m0s$##`
-     * Unix Epoch: `##$Epoch-0d0h5m0s$##`
-     * Syslog: `##$SyslogTime-0d0h5m0s$##`
+   - Use relative template tags.
+   - {SUPPORTED_TIME_TAGS}
 4. **Output Format**:
    Return a single valid JSON object:
    ```json
@@ -96,7 +92,7 @@ CRITICAL RULES:
    }
    ```
    Do not include any conversational preamble outside the JSON markdown block.
-"""
+""".replace("{SUPPORTED_TIME_TAGS}", SUPPORTED_TIME_TAGS_PROMPT)
 
 
 class ScenarioGenerator:
